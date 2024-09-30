@@ -1,0 +1,706 @@
+[
+  {
+    "number": 1,
+    "content": {
+      "title": "Question 1",
+      "description": "What are Binary Options?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Binary options are financial options that come with one of two payoff options: a fixed amount or nothing at all.The binary options trader buys a call when bullish on the asset in question, or a put when bearish. For a call/put to make money, the market must trade above/below the strike price at the expiration time.\n\n📔 [More info on Binary Options](https://thalesmarket.medium.com/binary-options-101-6048a4227e8b)"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 2,
+    "content": {
+      "title": "Question 2",
+      "description": "What is Thales?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Thales is a non-custodial binary options platform that taps into the infinite liquidity of the Synthetix ecosystem. Thales allows you to create, trade, and exercise binary options on Ethereum.\n To try out the Thales dapp head over to: [thales.market/markets](thales.market/markets)\n To learn more about how Thales works, visit our docs: [docs.thales.market](https://docs.thales.market/)"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 3,
+    "content": {
+      "title": "Question 3",
+      "description": "Who was Thales?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Thales was an ancient Greek Chad. He was a philosopher, mathematician, astronomer and, most importantly, the person who exercised the first recorded options trade in western history.  \n\nℹ️ [More info](https://thalesmarket.medium.com/olive-oil-a-cornered-market-and-our-logo-421be0f2fc93)"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 4,
+    "content": {
+      "title": "Question 4",
+      "description": "Is there a Thales token?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Thales token is expected to be released by the end of Q3 2021.Thales token main use case is governance of the protocol, community and ecosystem incentives. With further Thales development, any additional use case can be proposed and voted on for implementation by Thales governance body. \nStay tuned for more information about the token launch and the tokenomics soon!"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 5,
+    "content": {
+      "title": "Question 5",
+      "description": "Is there a Thales token airdrop?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "2% of THALES tokens or 2,000,000 will be airdropped to anyone who has ever staked SNX for at least one snapshot and claimed rewards at least once. This includes:L1 stakers, L2 stakers, xSNX stakers and Yearn vault stakers. \n\n In addition this airdrop will include:\n Everyone who used minted or made a trade on thales until snapshot \n All the POAP holders until the snapshot. \n\n Snapshot for the airdrop was taken at 6th of September 10am UTC \n"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 6,
+    "content": {
+      "title": "Question 6",
+      "description": "Will the platform be on L2?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer",
+          "value": "Thales is committed to rolling out on Optimism where the Synthetix debt pool will live. We expect to be live on L2 not long after the L1 MVP release."
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 7,
+    "content": {
+      "title": "Question 7",
+      "description": "What currency does Thales use as collateral?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Thales uses sUSD, synthetic US dollar from the Synthetix protocol, as a settlement currency for its binary options.\n For more information about sUSD, visit: [docs.thales.market/binary-options/susd](https://docs.thales.market/binary-options/susd)"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 8,
+    "content": {
+      "title": "Question 8",
+      "description": "From where does Thales pull its price feeds?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Thales is integrating Chainlink price feeds on Ethereum as an oracle solution.\n\n For more information about the Chainlink integration, visit: [thalesmarket.medium.com](https://thalesmarket.medium.com/thales-will-integrate-chainlink-price-feeds-to-secure-binary-options-outcomes-d7137f3199e1)."
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 9,
+    "content": {
+      "title": "Question 9",
+      "description": "What order books is Thales using?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Thales is integrating 0x protocol order books as a solution for trading Binary Options tokens on the platform.\n For more information about the 0x integration, visit: [first-0x-dao-grant-awarded](https://blog.0x.org/first-0x-dao-grant-awarded/)"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 10,
+    "content": {
+      "title": "Question 10",
+      "description": "What is the current gas price?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Gas prices currently not implemented."
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 11,
+    "content": {
+      "title": "Question 11",
+      "description": "How do I create a binary options market on the Thales marketplace?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "For a comprehensive and detailed guide on how to create your own Binary Options market on the Thales platform, visit: [market creation quide](https://docs.thales.market/using-thales/market-creation-guide )"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 12,
+    "content": {
+      "title": "Question 12",
+      "description": "How do I trade Binary Options on the Thales marketplace?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "For a comprehensive and detailed guide on how to trade Binary Options on the Thales marketplace, visit:\n\n **https://docs.thales.market/using-thales/trading**"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 13,
+    "content": {
+      "title": "Question 13",
+      "description": "How do I exercise my options on the Thales marketplace?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "For a comprehensive and detailed guide on how to exercise your options on the Thales marketplace, visit: [exercising](https://docs.thales.market/using-thales/exercising)"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 14,
+    "content": {
+      "title": "Question 14",
+      "description": "How does Market Making work on the Thales platform?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "A user who deposits sUSD into an existing market and mints new options is considered a Market Maker. There is a fixed 1% fee for Market Making, 0.5% goes to the pool creator and 0.5% goes to the protocol fee pool.\n For more information about how to mint options tokens, visit the Trade Module section of the Trading guide here: [trade-module](https://docs.thales.market/using-thales/trading#trade-module)"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 15,
+    "content": {
+      "title": "Question 15",
+      "description": "What is the Thales Council?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Thales council is a governing DAO composed of 4 members elected by the community of token holders. The council members operate during specific epochs and after each epoch the community conducts a new election via Snapshots IPFS infrastructure.\n Thales council's main responsibilities are conducting TIP reviews, interviewing the TIP proposers,  debating the implications of proposed changes and coordinating with the Protocol DAO regarding the technical implications and implementations."
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 16,
+    "content": {
+      "title": "Question 16",
+      "description": "What are TIPs?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "TIP is an abbreviation of Thales Improvement Proposal. TIPs are adapted from the EIP (Ethereum Improvement Proposal) and SIP (Synthetix Improvement Proposal) standards and they represent an artifact used to describe proposed changes to the core Thales protocol. A well designed TIP should feature the motivation, technical specifications and rationale behind design decisions relating to the proposed idea.\n More information about TIPs, their general purpose and guidelines can be found here:\n >> https://gov.thales.io/docs/tip-1 <<"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 17,
+    "content": {
+      "title": "Question 17",
+      "description": "How is Thales governance structured?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "The Thales protocol governance is made out of three core DAOs: \n\n - Thales council\n\n - Protocol DAO\n\n - Thales DAO\n\n Each of the DAOs has its own set of responsibilities and all of them together share the same mission of enabling the most optimal, efficient and censorship-resistant way for the Thales community to be the main driving force of the project.\n For more information about Thales Council, type: **!faq Thales Council**\n For more information about Protocol DAO, type: **!faq Protocol Dao**\n For more information about Thales DAO, type: **!faq Thales DAO**"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 18,
+    "content": {
+      "title": "Question 18",
+      "description": "What is the Protocol DAO?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Thales Protocol DAO is a decentralized autonomous organization assigned to be the owner of the Thales protocol core smart contracts. Its main responsibilities are upgrading and releasing new contracts (on behalf of the Thales Council), implementation of TIPs and operational security."
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 19,
+    "content": {
+      "title": "Question 19",
+      "description": "What is the Thales DAO?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Thales DAO is a DAO with the purpose of managing the treasury of the protocol. It is responsible for properly incentivizing the other governing bodies and to support further developments of the protocol. All of the DAO roles are paid a certain stipend by the Thales DAO."
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 20,
+    "content": {
+      "title": "Question 20",
+      "description": "Is there a Thales research forum?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Thales research forum can be found here:\n >> https://research.thales.io/ <<\n\n Thales research forum is the place for all focused discussions related to the Thales project where users can directly contribute their input to the project’s growth and development."
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 21,
+    "content": {
+      "title": "Question 21",
+      "description": "Where can I find the Thales docs?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Thales documentation:\n\n>>https://docs.thales.market/<<"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 22,
+    "content": {
+      "title": "Question 22",
+      "description": "Who are the Thales Titans?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Θαλής τιτάνες\n\n**Thales Titans** is the name of the best community in the space: The Thales Community!"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 23,
+    "content": {
+      "title": "Question 23",
+      "description": "What markets are currently available on Thales?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "You can see the markets currently live on Thales here:\n https://thales.market/markets#overview \n\n If you need help with trading on Thales, you should visit our **Thales trading guide**:\n https://docs.thales.market/using-thales/trading"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 24,
+    "content": {
+      "title": "Question 24",
+      "description": "What is the THALES token distribution?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "**THALES token distribution:**\n\n**- 35% to SNX stakers**:\n - 2% Retro airdrop to anyone who ever staked SNX\n - 15% Retro pro rata rewards (vesting)\n - 18% Ongoing rewards (vesting)\n\n**-  15% THALES staking rewards (ongoing for 3 years)**\n\n**-  30% Growth fund**\n -  9% Strategic round (2 year linear unlock)\n -  2% Crowdpooling event\n - 18% Thales DAO treasury (for ad-hoc incentives)\n -  1% THALES/ETH LP rewards (ongoing for 20 weeks)\n\n**- 20% Thales Core Contributors (1 year cliff and 3 year linear unlocking)**\n\nFor deeper dive into THALES tokenomics, please visit: \n**https://thalesmarket.medium.com/thales-tokenomics-introducing-thales-token-3aab321174e7**\n"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 25,
+    "content": {
+      "title": "Question 25",
+      "description": "When will THALES token launch?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "THALES token will be launched on 13th September, 16:00 UTC with a DODO Crowdpooling event. \n\n More information about the crowdpooling event and how to participate can be found here:\n\n https://thalesmarket.medium.com/thales-dao-token-public-liquidity-offering-5c7621bbb678 \n"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 26,
+    "content": {
+      "title": "Question 26",
+      "description": "What is the THALES token total supply?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "THALES token total supply is:\n\n 100,000,000 tokens\n\n To see the THALES token distribution, type: !faq distribution\n To see the THALES Tokenomics, please visit: **https://thalesmarket.medium.com/thales-tokenomics-introducing-thales-token-3aab321174e7**"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 27,
+    "content": {
+      "title": "Question 27",
+      "description": "How will THALES token be distributed to SNX stakers?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "\n To learn in detail how the THALES tokens will be distributed to SNX stakers, visit the following link:\n\n https://docs.thales.market/getting-started/thales-tokenomics#snx-stakers-distribution \n"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 28,
+    "content": {
+      "title": "Question 28",
+      "description": "What happens if I don't claim my THALES staking reward for current week?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "If an address has had claimable THALES in the last week but hasn't claimed them, that THALES is made available to the same address in the next week.\n In other words, **there is no pressure to claim weekly**.\n\n **However, there are benefits of regularly claiming rewards, as claimed THALES rewards that are vesting are considered staked and accruing rewards.** "
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 29,
+    "content": {
+      "title": "Question 29",
+      "description": "How do I navigate to the THALES crowdpooling event?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Link to THALES crowdpooling event: \n\n >>> ***https://app.dodoex.io/cp/join/0xfa64bc0f8097f81efb4a453d522ec64df8d12cc6?network=mainnet*** <<< \n\n For more information about the crowdpool and how to participate, visit this page:\nhttps://thalesmarket.medium.com/thales-dao-token-public-liquidity-offering-5c7621bbb678\n"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 30,
+    "content": {
+      "title": "Question 30",
+      "description": "Am I eligible for the THALES airdrop?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "**Retro Airdrop**: 2% of THALES tokens or 2,000,000 will be airdropped to anyone who has **ever staked SNX for at least one snapshot** and **claimed rewards at least once**.\n\n If your address is on the airdrop eligibility sheet, you are eligible for the airdrop!\n\n This is the updated airdrop eligibility sheet: \n\n https://docs.google.com/spreadsheets/d/1naboaD-UzIMHwT2bq7jNKkglA34jXmBTa2SrbWBNScg/edit#gid=0 \n"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 31,
+    "content": {
+      "title": "Question 31",
+      "description": "When can the airdrop be claimed?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "If you are eligible for the THALES airdrop, you can claim your tokens after the Crowdpool end, **Thursday, 16th September, 2021**.\n\n We will announce where you can claim soon!\n"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 32,
+    "content": {
+      "title": "Question 32",
+      "description": "When is the THALES inital liquidity offering happening?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "THALES initial liquidity offering is happening on **Monday, 13th September, 14:00 UTC**\n It will last for 48h with additional 12h of Cooling off period\n\n More details can be found here:\n >>>***https://thalesmarket.medium.com/thales-dao-token-public-liquidity-offering-5c7621bbb678***<<< \n"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 33,
+    "content": {
+      "title": "Question 33",
+      "description": "How do I participate in the THALES crowdpooling event?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "You can find a detailed guide on how to participate in the THALES crowdpooling event here:\n\n >>> ***https://thalesmarket.medium.com/thales-dao-token-public-liquidity-offering-5c7621bbb678*** <<<"
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 34,
+    "content": {
+      "title": "Question 34",
+      "description": "Why am I not on the Retroactive pro-rata rewards address list?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Retroactive pro-rata rewards for SNX stakers are calculated retroactively on a weekly basis and then aggregated based on how long and how much SNX you staked until September 6th snapshot. in other words, it takes into account your part of the Synthetix global debt. This is why claiming rewards was required to qualify, as it demonstrates a healthy c-ratio maintenance.\n\nThese retro pro-rata rewards are unlocked on a weekly basis for 100 weeks.\n\n There is a floor set up for minimum amount, meaning that if your aggregated rewards end up being below 24 THALES, you are not eligible for the pro-rata distribution. Every SNX staker who claimed at least once will receive 137 THALES token as an airdrop to compensate for those whose SNX stack wasn't big enough compared to the total debt to grant them an ongoing distribution."
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 35,
+    "content": {
+      "title": "Question 35",
+      "description": "What is the list of addresses for the Retroactive pro-rata rewards for SNX stakers?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Eligible addresses for the *Retroactive pro-rata rewards** and the total amounts of THALES allocated to them can be seen here \n\n **https://docs.google.com/spreadsheets/d/1CLHqFOsf2Pt2MZKP1VVU-M_IeddaFrNujaFcVb-K1RQ/edit#gid=0** \n\n" 
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 36,
+    "content": {
+      "title": "Question 36",
+      "description": "How do I register for Thales trading competition?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "To participate in the Thales trading competition, you have to register your (**at least 3 month old**) twitter profile using this link: \n\nhttps://thales.market/markets/leaderboard\n *God speed, competitor!*\n" 
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 37,
+    "content": {
+      "title": "Question 37",
+      "description": "Thales trading competition cheat sheet",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": " - *Registration for the competition*: https://thales.market/markets/leaderboard (twitter profile needs to be at least 3 months old) \n - *Start of the competition*: Monday, October 11th at 10:00AM UTC \n - *End of the competition*: Monday, November 1st at 10:00AM UTC \n - *Markets for the competition*: **Amount of ETH burned**,  **ETH/BTC market cap ratio**, **ETH/USD**, **BTC/USD** and **SNX/USD** markets. (links for dedicated competition markets to be shared on start of the competition) \n -  *Total prize pool to be distributed*: 25,000 THALES and 1,500 SNX. \n - *Results calculation*: One leaderboard for **NET PROFIT** and one leaderboard for **GAIN PERCENTAGE** \n - *Thales Trading Guide*: https://docs.thales.market/using-thales/trading \n\n" 
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 38,
+    "content": {
+      "title": "Question 38",
+      "description": "Thales trading competition guide",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "All the important information and a guide on how to participate in the Thales' first trading competition can be found here: \n\n https://docs.thales.market/using-thales/guide-for-thales-first-trading-competition.\n" 
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 39,
+    "content": {
+      "title": "Question 39",
+      "description": "THALES staking guide",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "For all the relevant information and a comprehensive guide for THALES staking, visit this link: \n\n **https://docs.thales.market/using-thales/thales-staking-guide**\n" 
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 40,
+    "content": {
+      "title": "Question 40",
+      "description": "How does THALES staking work?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Thales staking contract is a contract in which users lock their THALES to receive voting power on the protocol. THALES staked balances will be used to determine voting power for governance votes. To incentivize staking 50,000 THALES tokens will be distributed weekly to THALES stakers over a course of 150 weeks, and additional 50,000 tokens weekly to L2 stakers when the token migrates to Optimism layer 2. \n\n - Rewards are distributed on a **pro rata weekly snapshot basis.** \n - If an address has had claimable THALES in the last week but hasn't claimed them, that THALES is made available to the same address in the next week together with that weeks new rewards. **In other words, there is no pressure to claim weekly**. \n\n - THALES staking page: https://thales.market/token?tab=staking \n - Guide for staking THALES: https://docs.thales.market/using-thales/thales-staking-guide \n\n " 
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 41,
+    "content": {
+      "title": "Question 41",
+      "description": "Thales Royale Guide",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "All the important information and a guide on how to participate in the first Thales Royale can be found here: \n\n **https://docs.thalesmarket.io/using-thales/thales-royale-guide\n**" 
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 42,
+    "content": {
+      "title": "Question 42",
+      "description": "I am getting a *Failed Transaction 67 error* while trying to Sign Up for Thales Royale",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "If you are getting a *Failed Transaction 67 error* while trying to **Sign Up** for Thales Royale, you need to reset your Kovan Optimism wallet nonce. The cause of this issue is that your wallets old nonce got cached after the latest Optimism Regenesis and your wallet is trying to send transactions with nonces that are too high.\n\n **Solution:**\n On your Metamask settings, go to *Advanced* -> *Reset Account* to reset your nonce and get Metamask working again." 
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 43,
+    "content": {
+      "title": "Question 43",
+      "description": "How do I Sign Up for Thales Royale?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "**Step 1:** Enter the **#thales-royale-verify** channel and type a message: !verify <insert your Ethereum address or ENS name here>\n\n **Step 2:** Enter Thales Royale page on the dapp (https://thalesmarket.io/royale) and click on the **Sign Up** button and confirm the transaction.\n\n :RedLight: ***Important disclaimer: If you do not click the Sign Up button until the first round starts, you will not be able to participate in Thales Royale.***:RedLight: " 
+        }
+      ],
+      "footer": {
+      }
+    }
+  },
+  {
+    "number": 44,
+    "content": {
+      "title": "Question 44",
+      "description": "How do I fix Sorbet.finance UI on Optimism?",
+      "color": "0099ff",
+      "fields": [
+        {
+          "title": "Answer:",
+          "value": "Sorbet.finance UI is still in Beta phase. \n\nIf you are having issues with seeing your wallet balance or if the THALES token is not showing, try to **clear the application state** in your Web Browser console.\n(https://i.postimg.cc/brJZQFdG/annotely-image-4.jpg)" 
+        }
+      ],
+      "footer": {
+      }
+    }
+  }
+]
