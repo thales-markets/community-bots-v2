@@ -9,6 +9,7 @@ const clientNewListings = new Client({
   ],
 });
 clientNewListings.login(process.env.BOT_TOKEN_LISTINGS);
+const redis = require("redis");
 var fs = require("fs");
 const axios = require("axios");
 const SYNTH_USD_MAINNET = "0x57ab1ec28d129707052df4df418d58a2d46d5f51";
@@ -120,7 +121,10 @@ WINNER.push(0, 10011, 10012,
     10056,
     10057,
     10058,
-    10059
+    10059,
+    10019,
+    10020,
+    10130
 );
 
 let HANDICAP = new Array;
@@ -135,6 +139,7 @@ HANDICAP.push(10001,
     10047,
     10048,
     10049,
+    10071,
     10072,
     10073,
     10074,
@@ -144,6 +149,14 @@ HANDICAP.push(10001,
     10078,
     10079
 );
+
+let WINNING_ROUND = new Array;
+WINNING_ROUND.push(10151);
+
+let ENDING_METHOD = new Array;
+ENDING_METHOD.push(10157);
+let METHOD_OF_VICTORY = new Array;
+METHOD_OF_VICTORY.push(10158);
 
 let TOTAL_HOME_FIRST = new Array;
 TOTAL_HOME_FIRST.push(10111)
@@ -198,7 +211,39 @@ TOTAL.push(10002,
     11060,
     11086,
     11097,
-    11098);
+    11098,
+    11011,
+    11200,
+    11011,
+    11200,
+    11201,
+    11202,
+    11204,
+    11205,
+    11206,
+    11207,
+    11208,
+    11209,
+    11210,
+    11211,
+    11212,
+    11213,
+    11214,
+    11215,
+    11216,
+    11217,
+    11218,
+    11219,
+    11220,
+    11221,
+    11222,
+    11223,
+    11225,
+    11226,
+    11227,
+    11228,
+    11229,
+    11230);
 
 let W_TOTAL = new Array;
 W_TOTAL.push(10004);
@@ -330,6 +375,51 @@ async function getV2MessageContent(overtimeMarketTrade,typeMap) {
       betMessage = awayTeam;
     } else {
       betMessage = "Draw";
+    }
+  }
+  else if(WINNING_ROUND.includes(marketId)){
+    switch (position) {
+      case 0:
+        betMessage = "Draw";
+      case 1:
+        betMessage = "By decision";
+      default: {
+        let round = position -1;
+        betMessage = "Round: "+round;
+      }
+    }
+  }
+  else if(ENDING_METHOD.includes(position)){
+    switch (position) {
+      case 0:
+        betMessage = "Draw";
+      case 1:
+        betMessage = "By decision";
+      case 2:
+        betMessage = "KO/TKO/DQ";
+      case 3:
+        betMessage = "Submission";
+      default: betMessage = "";
+    }
+  }
+  else if(METHOD_OF_VICTORY.includes(marketId)){
+    switch (position) {
+      case 0:
+        return 'Draw';
+      case 1:
+        return homeTeam+" (Decision)";
+      case 2:
+        return homeTeam+" (KO/TKO/DQ)";
+      case 3:
+        return homeTeam+" (Submission)";
+      case 4:
+        return awayTeam+" (Decision)";
+      case 5:
+        return awayTeam+" (KO/TKO/DQ)";
+      case 6:
+        return awayTeam+" (Submission)";
+      default:
+        return '';
     }
   } else if(CORRECT_SCORE_LIST.includes(marketId)){
     betMessage =  CORRECT_SCORE_MAP.get(position);
@@ -545,8 +635,51 @@ async function getV2ParlayMessage(overtimeMarketTrade, parlayMessage,typeMap) {
         }
       }  else if(CORRECT_SCORE_LIST.includes(marketId)){
         betMessage =  CORRECT_SCORE_MAP.get(position);
+      } else if(WINNING_ROUND.includes(marketId)){
+        switch (position) {
+          case 0:
+            betMessage = "Draw";
+          case 1:
+            betMessage = "By decision";
+          default: {
+            let round = position -1;
+            betMessage = "Round: "+round;
+          }
+        }
       }
-      else if (HANDICAP.includes(marketId)) {
+      else if(ENDING_METHOD.includes(position)){
+        switch (position) {
+          case 0:
+            betMessage = "Draw";
+          case 1:
+            betMessage = "By decision";
+          case 2:
+            betMessage = "KO/TKO/DQ";
+          case 3:
+            betMessage = "Submission";
+          default: betMessage = "";
+        }
+      }
+      else if(METHOD_OF_VICTORY.includes(marketId)){
+        switch (position) {
+          case 0:
+            return 'Draw';
+          case 1:
+            return homeTeam+" (Decision)";
+          case 2:
+            return homeTeam+" (KO/TKO/DQ)";
+          case 3:
+            return homeTeam+" (Submission)";
+          case 4:
+            return awayTeam+" (Decision)";
+          case 5:
+            return awayTeam+" (KO/TKO/DQ)";
+          case 6:
+            return awayTeam+" (Submission)";
+          default:
+            return '';
+        }
+      } else if (HANDICAP.includes(marketId)) {
         if (isTenisV2(marketsData.sportId)) {
           if (position == 0) {
             if (marketsData.typeId == "10001") {
@@ -824,11 +957,11 @@ async function getOvertimeV2Trades(){
               },
               {
                 name: ":alarm_clock: Game time:",
-                value: new Date(overtimeMarketTrade.marketsData[0].maturity * 1000),
+                value: new Date(overtimeMarketTrade.marketsData[0].maturity * 1000).toUTCString(),
               },
               {
                 name: ":alarm_clock: Timestamp:",
-                value: new Date(overtimeMarketTrade.createdAt * 1000),
+                value: new Date(overtimeMarketTrade.createdAt * 1000).toUTCString(),
               },
             ],
           };
@@ -856,7 +989,7 @@ async function getOvertimeV2Trades(){
                 .fetch("1249389262089228309");
             }
           }
-          overtimeTradesChannel.send({ embeds: [embed] });
+          await overtimeTradesChannel.send({embeds: [embed]});
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
           redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
 
@@ -916,11 +1049,11 @@ async function getOvertimeV2Trades(){
               },
               {
                 name: ":alarm_clock: End time:",
-                value: new Date(overtimeMarketTrade.expiry * 1000),
+                value: new Date(overtimeMarketTrade.expiry * 1000).toUTCString(),
               },
               {
                 name: ":alarm_clock: Timestamp:",
-                value: new Date(overtimeMarketTrade.createdAt * 1000),
+                value: new Date(overtimeMarketTrade.createdAt * 1000).toUTCString(),
               }
             ],
           };
@@ -948,7 +1081,7 @@ async function getOvertimeV2Trades(){
                 .fetch("1249389262089228309");
           }}
 
-          overtimeTradesChannel.send({ embeds: [embed] });
+          await overtimeTradesChannel.send({embeds: [embed]});
 
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
           redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
@@ -1100,11 +1233,11 @@ async function getOvertimeV2ARBTrades(){
               },
               {
                 name: ":alarm_clock: Game time:",
-                value: new Date(overtimeMarketTrade.marketsData[0].maturity * 1000),
+                value: new Date(overtimeMarketTrade.marketsData[0].maturity * 1000).toUTCString(),
               },
               {
                 name: ":alarm_clock: Timestamp:",
-                value: new Date(overtimeMarketTrade.createdAt * 1000),
+                value: new Date(overtimeMarketTrade.createdAt * 1000).toUTCString(),
               }
             ],
           };
@@ -1138,7 +1271,7 @@ async function getOvertimeV2ARBTrades(){
           writenOvertimeV2ARBTrades.push(overtimeMarketTrade.id);
           let newVar1 = await redisClient.lpush(overtimeV2ARBTradesKey, overtimeMarketTrade.id);
           let newVar = await overtimeTradesChannel.send({ embeds: [embed] });
-          console.log("#@#@#@Sending arb message: "+message);
+          console.log("#@#@#@Sending arb message: "+JSON.stringify(embed));
           }
         } else {
           let parlayMessage = "";
@@ -1196,11 +1329,11 @@ async function getOvertimeV2ARBTrades(){
               },
               {
                 name: ":alarm_clock: End time:",
-                value: new Date(overtimeMarketTrade.expiry * 1000),
+                value: new Date(overtimeMarketTrade.expiry * 1000).toUTCString(),
               },
               {
                 name: ":alarm_clock: Timestamp:",
-                value: new Date(overtimeMarketTrade.createdAt * 1000),
+                value: new Date(overtimeMarketTrade.createdAt * 1000).toUTCString(),
               }
             ],
           };
@@ -1233,7 +1366,7 @@ async function getOvertimeV2ARBTrades(){
             writenOvertimeV2ARBTrades.push(overtimeMarketTrade.id);
             let lpush = await redisClient.lpush(overtimeV2ARBTradesKey, overtimeMarketTrade.id);
            let newVar = await overtimeTradesChannel.send({ embeds: [embed] });
-            console.log("#@#@#@Sending arb message: "+message);
+            console.log("#@#@#@Sending arb message: "+JSON.stringify(embed));
           }
         }
 
