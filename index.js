@@ -330,10 +330,13 @@ clientNewListings.once("ready", () => {
 
 setInterval(function () {
   console.log("get L2 trades");
-  getOvertimeV2ARBTrades();
   getOvertimeV2Trades();
 }, 5 * 60 * 1000);
 
+setInterval(function () {
+  console.log("get L2 trades");
+  getOvertimeV2ARBTrades();
+}, 7 * 60 * 1000);
 
 function  isTenisV2(sportId) {
   if(sportId.startsWith("153") || sportId.startsWith("156")) {
@@ -842,9 +845,9 @@ async function getOvertimeV2Trades(){
 
   let activeTickets = await v2Contract.methods.getActiveTickets(0,10000).call();
   let overtimeTrades;
-  if (activeTickets.length>1000){
-    overtimeTrades = await v2TicketContract.methods.getTicketsData(activeTickets.slice(0, 1000)).call();
-    overtimeTrades = overtimeTrades.concat(await v2TicketContract.methods.getTicketsData(activeTickets.slice(1000, 2000)).call());
+  if (activeTickets.length>900){
+    overtimeTrades = await v2TicketContract.methods.getTicketsData(activeTickets.slice(0, 900)).call();
+    overtimeTrades = overtimeTrades.concat(await v2TicketContract.methods.getTicketsData(activeTickets.slice(900, 1800)).call());
   } else {
     overtimeTrades = await v2TicketContract.methods.getTicketsData(activeTickets).call();
   }let typeInfoMap = await axios.get('https://api.thalesmarket.io/overtime-v2/market-types');//api.thalesmarket.io/overtime-v2/market-types;
@@ -854,7 +857,7 @@ async function getOvertimeV2Trades(){
   const sportMap = new Map(Object.entries(JSON.parse(JSON.stringify(sportsInfoMap))));
   const typeMap = new Map(Object.entries(JSON.parse(JSON.stringify(typeInfoMap))));
   var startdate = new Date();
-  var durationInMinutes = 5;
+  var durationInMinutes = 30;
   startdate.setMinutes(startdate.getMinutes() - durationInMinutes);
   let startDateUnixTime = Math.floor(startdate.getTime());
   console.log("##### length before is "+overtimeTrades.length);
@@ -895,7 +898,7 @@ async function getOvertimeV2Trades(){
           let {marketType, marketMessage, betMessage} = await getV2MessageContent(overtimeMarketTrade,typeMap);
 
           let linkTransaction;
-          linkTransaction = "https://optimistic.etherscan.io/address/";
+          linkTransaction = "https://www.overtimemarkets.xyz/tickets/";
 
 
           const embed = {
@@ -997,7 +1000,7 @@ async function getOvertimeV2Trades(){
           let parlayMessage = "";
           parlayMessage = await getV2ParlayMessage(overtimeMarketTrade, parlayMessage,typeMap);
           let linkTransaction;
-          linkTransaction = "https://optimistic.etherscan.io/address/"
+          linkTransaction = "https://www.overtimemarkets.xyz/tickets/"
 
           const embed = {
             fields: [
@@ -1128,7 +1131,7 @@ async function getOvertimeV2ARBTrades(){
   const sportMap = new Map(Object.entries(JSON.parse(JSON.stringify(sportsInfoMap))));
   const typeMap = new Map(Object.entries(JSON.parse(JSON.stringify(typeInfoMap))));
   var startdate = new Date();
-  var durationInMinutes = 5;
+  var durationInMinutes = 30;
   startdate.setMinutes(startdate.getMinutes() - durationInMinutes);
   let startDateUnixTime = Math.floor(startdate.getTime());
   console.log("##### length before is "+overtimeTrades.length);
@@ -1172,8 +1175,7 @@ async function getOvertimeV2ARBTrades(){
           let {marketType, marketMessage, betMessage} = await getV2MessageContent(overtimeMarketTrade,typeMap);
 
           let linkTransaction;
-          linkTransaction = "https://arbiscan.io/address/"
-
+          linkTransaction = "https://www.overtimemarkets.xyz/tickets/";
 
           const embed = {
             fields: [
@@ -1199,7 +1201,7 @@ async function getOvertimeV2ARBTrades(){
                 value: betMessage,
               },
               {
-                name: ":link: Ticket address:",
+                name: ":link: Ticket  address:",
                 value:
                     "[" +
                     overtimeMarketTrade.id +
@@ -1277,7 +1279,7 @@ async function getOvertimeV2ARBTrades(){
           let parlayMessage = "";
           parlayMessage = await getV2ParlayMessage(overtimeMarketTrade, parlayMessage,typeMap);
           let linkTransaction;
-          linkTransaction = "https://arbiscan.io/address/"
+          linkTransaction = "https://www.overtimemarkets.xyz/tickets/"
 
           const embed = {
             fields: [
