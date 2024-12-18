@@ -912,7 +912,7 @@ async function getOvertimeV2Trades(){
                 value:
                     "[" +
                     marketMessage +
-                    "](https://v2.overtimemarkets.xyz/markets/" +
+                    "](https://www.overtimemarkets.xyz/markets/" +
                     overtimeMarketTrade.marketsData[0].gameId +
                     ")",
               },
@@ -1013,7 +1013,7 @@ async function getOvertimeV2Trades(){
                 value:
                     "[" +
                     parlayMessage +
-                    "](https://v2.overtimemarkets.xyz/markets/" +
+                    "](https://www.overtimemarkets.xyz/markets/" +
                     overtimeMarketTrade.marketsData[0].gameId +
                     ")",
               },
@@ -1188,7 +1188,7 @@ async function getOvertimeV2ARBTrades(){
                 value:
                     "[" +
                     marketMessage +
-                    "](https://v2.overtimemarkets.xyz/markets/" +
+                    "](https://www.overtimemarkets.xyz/markets/" +
                     overtimeMarketTrade.marketsData[0].gameId +
                     ")",
               },
@@ -1292,7 +1292,7 @@ async function getOvertimeV2ARBTrades(){
                 value:
                     "[" +
                     parlayMessage +
-                    "](https://v2.overtimemarkets.xyz/markets/" +
+                    "](https://www.overtimemarkets.xyz/markets/" +
                     overtimeMarketTrade.marketsData[0].gameId +
                     ")",
               },
