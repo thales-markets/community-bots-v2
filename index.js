@@ -35,17 +35,23 @@ let FREE_BET_ARB = "0xd1F2b87a9521315337855A132e5721cfe272BBd9";
 let STAKING_ARB = "0x109e966A4d856B82f158BF528395de6fF36214A8";
 let overtimeV2TradesKey = "overtimeV2TradesKey";
 let overtimeV2ARBTradesKey = "overtimeV2ARBTradesKey";
+let overtimeV2BASETradesKey = "overtimeV2BASETradesKey";
 let FREE_BET_OP = "0x8D18e68563d53be97c2ED791CA4354911F16A54B";
 let STAKING_OP = "0x5e6D44B17bc989652920197790eF626b8a84e219";
+
+let FREE_BET_BASE = "0x2929Cf1edAc2DB91F68e2822CEc25736cAe029bf";
+let STAKING_BASE = "0x84aB38e42D8Da33b480762cCa543eEcA6135E040";
 
 let contractStakingTRaw = fs.readFileSync('contracts/staking.json');
 let v2StakingRaw = JSON.parse(contractStakingTRaw);
 
 let v2StakingARB = new web3Arbitrum.eth.Contract(v2StakingRaw,STAKING_ARB);
 let v2StakingOP = new web3L2.eth.Contract(v2StakingRaw,STAKING_OP);
+let v2StakingBASE = new web3Base.eth.Contract(v2StakingRaw,STAKING_BASE);
 
 let v2FreeBetARB = new web3Arbitrum.eth.Contract(v2StakingRaw,FREE_BET_ARB);
 let v2FreeBetgOP = new web3L2.eth.Contract(v2StakingRaw,FREE_BET_OP);
+let v2FreeBetgBASE = new web3Base.eth.Contract(v2StakingRaw,FREE_BET_BASE);
 
 
 let contractV2TicketRaw = fs.readFileSync('contracts/v2overtimeTicket.json');
@@ -56,8 +62,15 @@ let v2ARBContract = new web3ArbitrumV2.eth.Contract(v2ContractRaw,"0xB155685132e
 
 let v2ARBTicketContract = new web3ArbitrumV2.eth.Contract(v2ContractTicketRaw,"0x04386f9b2b4f713984Fe0425E46a376201641649");
 
+let v2BASEContract = new web3Base.eth.Contract(v2ContractRaw,"0xA2dCFEe657Bc0a71AC31d146366246202eae18a4");
+
+let v2BASETicketContract = new web3Base.eth.Contract(v2ContractTicketRaw,"0x99D318b6402cE95B6B46F40f752eA96430A2Ead0");
+
+
 let writenOvertimeV2Trades = [];
 let writenOvertimeV2ARBTrades = [];
+
+let writenOvertimeV2BASETrades = [];
 
 if (process.env.REDIS_URL) {
   redisClient = redis.createClient(process.env.REDIS_URL);
@@ -73,6 +86,12 @@ if (process.env.REDIS_URL) {
     writenOvertimeV2ARBTrades = polygonTrades;
   });
 
+  redisClient.lrange(overtimeV2BASETradesKey, 0, -1, function (err, polygonTrades) {
+    writenOvertimeV2BASETrades = polygonTrades;
+  });
+
+
+
 }
 
 function  formatV2Amount(numberForFormating, collateralAddress) {
@@ -83,6 +102,16 @@ function  formatV2Amount(numberForFormating, collateralAddress) {
     return numberForFormating / 1e6
   }
 }
+
+function  formatV2BASEAmount(numberForFormating, collateralAddress) {
+
+  if(collateralAddress == "0x4200000000000000000000000000000000000006" || collateralAddress == "0x1527d463cC46686f815551314BD0E5Af253d58C0") {
+    return numberForFormating / 1e18;
+  } else {
+    return numberForFormating / 1e6
+  }
+}
+
 
 function  formatV2ARBAmount(numberForFormating, collateralAddress) {
 
@@ -332,6 +361,12 @@ setInterval(function () {
   console.log("get L2 trades");
   getOvertimeV2Trades();
 }, 5 * 60 * 1000);
+
+
+setInterval(function () {
+  console.log("get L2 trades");
+  getOvertimeV2BASETrades();
+}, 6 * 60 * 1000);
 
 setInterval(function () {
   console.log("get L2 trades");
@@ -884,7 +919,7 @@ async function getOvertimeV2Trades(){
         let isSystem = overtimeMarketTrade.isSystem;
         let mustWins;
         if(isSystem){
-          mustWins = overtimeMarketTrade.marketsData.length+"/"+Number(overtimeMarketTrade.systemBetDenominator);
+          mustWins = Number(overtimeMarketTrade.systemBetDenominator)+"/"+overtimeMarketTrade.marketsData.length;
         }else {
           mustWins = overtimeMarketTrade.marketsData.length+"/"+overtimeMarketTrade.marketsData.length;
         }
@@ -1289,7 +1324,6 @@ async function getOvertimeV2ARBTrades(){
           ))
   )
   console.log("##### length is after dupl "+overtimeTradesUQ.length);
-  console.log("##### trades are  "+ JSON.stringify(overtimeTradesUQ));
   for (const overtimeMarketTrade of overtimeTradesUQ) {
     if (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2ARBTrades.includes(overtimeMarketTrade.id)) {
       try {
@@ -1298,7 +1332,7 @@ async function getOvertimeV2ARBTrades(){
         let isSystem = overtimeMarketTrade.isSystem;
         let mustWins;
         if(isSystem){
-          mustWins = overtimeMarketTrade.marketsData.length+"/"+Number(overtimeMarketTrade.systemBetDenominator);
+          mustWins = Number(overtimeMarketTrade.systemBetDenominator)+"/"+overtimeMarketTrade.marketsData.length;
         }else {
           mustWins = overtimeMarketTrade.marketsData.length+"/"+overtimeMarketTrade.marketsData.length;
         }
@@ -1673,6 +1707,420 @@ async function getOvertimeV2ARBTrades(){
 
       } catch (e) {
         console.log("There was a problem while getting overtime V2 trades arb #@#@#@@#@",e);
+      }
+    }
+  }
+}
+
+
+async function getOvertimeV2BASETrades(){
+
+  let activeTickets = await v2BASEContract.methods.getActiveTickets(0,10000).call();
+  let overtimeTrades = await v2BASETicketContract.methods.getTicketsData(activeTickets).call();
+  let typeInfoMap = await axios.get('https://api.thalesmarket.io/overtime-v2/market-types');//api.thalesmarket.io/overtime-v2/market-types;
+  let sportsInfoMap = await axios.get('https://api.thalesmarket.io/overtime-v2/sports');
+  typeInfoMap = typeInfoMap.data;
+  sportsInfoMap = sportsInfoMap.data;
+  const sportMap = new Map(Object.entries(JSON.parse(JSON.stringify(sportsInfoMap))));
+  const typeMap = new Map(Object.entries(JSON.parse(JSON.stringify(typeInfoMap))));
+  var startdate = new Date();
+  var durationInMinutes = 30;
+  startdate.setMinutes(startdate.getMinutes() - durationInMinutes);
+  let startDateUnixTime = Math.floor(startdate.getTime());
+  console.log("##### length before is "+overtimeTrades.length);
+  overtimeTrades = await overtimeTrades.filter(item => !writenOvertimeV2BASETrades.includes(item.id) && startDateUnixTime < Number(item.createdAt * 1000));
+  console.log("##### length is "+overtimeTrades.length);
+  let overtimeTradesUQ = await overtimeTrades.filter((value, index, self) =>
+          index === self.findIndex((t) => (
+              t.id == value.id || t.createdAt == value.createdAt
+          ))
+  )
+  console.log("##### length is after dupl "+overtimeTradesUQ.length);
+  for (const overtimeMarketTrade of overtimeTradesUQ) {
+    if (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id)) {
+      try {
+
+
+        let isSystem = overtimeMarketTrade.isSystem;
+        let mustWins;
+        if(isSystem){
+          mustWins = Number(overtimeMarketTrade.systemBetDenominator)+"/"+overtimeMarketTrade.marketsData.length;
+        }else {
+          mustWins = overtimeMarketTrade.marketsData.length+"/"+overtimeMarketTrade.marketsData.length;
+        }
+        let moneySymbol;
+        let multiplier = 1;
+
+        if (overtimeMarketTrade.collateral=="0x4200000000000000000000000000000000000006"){
+          moneySymbol = "weth";
+          multiplier = ethPrice;
+        } else if (overtimeMarketTrade.collateral=="0x1527d463cC46686f815551314BD0E5Af253d58C0"){
+          moneySymbol = "OVER";
+          multiplier = thalesPrice;
+        } else {
+          moneySymbol = "USDC";
+        }
+
+        let ticketOwner;
+        if(overtimeMarketTrade.ticketOwner == STAKING_BASE ){
+          ticketOwner =  await v2StakingBASE.methods.ticketToUser(overtimeMarketTrade.id).call();
+        } else if (overtimeMarketTrade.ticketOwner == FREE_BET_BASE) {
+          ticketOwner =  await v2FreeBetgBASE.methods.ticketToUser(overtimeMarketTrade.id).call();
+        } else
+        {
+          ticketOwner = overtimeMarketTrade.ticketOwner;
+        }
+
+        let buyIn = roundTo2Decimals(formatV2BASEAmount(overtimeMarketTrade.buyInAmount , overtimeMarketTrade.collateral));
+        let odds = oddslib.from('impliedProbability', overtimeMarketTrade.totalQuote / 1e18).decimalValue.toFixed(3)
+        if (overtimeMarketTrade.marketsData.length==1) {
+          let {marketType, marketMessage, betMessage} = await getV2MessageContent(overtimeMarketTrade,typeMap);
+
+          let overtimeLink;
+          overtimeLink = "https://www.overtimemarkets.xyz/tickets/";
+          let linkTransaction = "https://basescan.org/address/";
+          let embed;
+          if(isSystem){
+            embed = {
+              fields: [
+                {
+                  name: "Overtime V2 Market Trade",
+                  value: "\u200b",
+                },
+                {
+                  name: ":classical_building: Overtime market:",
+                  value:
+                      "[" +
+                      marketMessage +
+                      "](https://www.overtimemarkets.xyz/markets/" +
+                      overtimeMarketTrade.marketsData[0].gameId +
+                      ")",
+                },
+                {
+                  name: ":coin: Bet type:",
+                  value: marketType,
+                },
+                {
+                  name: ":coin: Position:",
+                  value: betMessage,
+                },
+                {
+                  name: ":link: Ticket  address:",
+                  value:
+                      "[" +
+                      overtimeMarketTrade.id +
+                      "](" + overtimeLink +
+                      overtimeMarketTrade.id +
+                      ")",
+                },{
+                  name: ":link: Ticket owner:",
+                  value:
+                      "[" +
+                      ticketOwner +
+                      "](" + linkTransaction +
+                      ticketOwner +
+                      ")",
+                },
+                {
+                  name: ":coin: System:",
+                  value: mustWins
+                },
+                {
+                  name: ":coin: Buy in Amount:",
+                  value: buyIn + " " + moneySymbol
+                },
+                {
+                  name: ":coin: Payout:",
+                  value: roundTo2Decimals(buyIn * odds) + " "+ moneySymbol ,
+                },
+                {
+                  name: ":coin: Fees:",
+                  value: formatV2BASEAmount(overtimeMarketTrade.fees , overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol ,
+                },
+                {
+                  name: ":coin: Odds:",
+                  value: odds,
+                },
+                {
+                  name: ":alarm_clock: Game time:",
+                  value: new Date(overtimeMarketTrade.marketsData[0].maturity * 1000).toUTCString(),
+                },
+                {
+                  name: ":alarm_clock: Timestamp:",
+                  value: new Date(overtimeMarketTrade.createdAt * 1000).toUTCString(),
+                }
+              ],
+            };
+          } else {
+
+            embed = {
+              fields: [
+                {
+                  name: "Overtime V2 Market Trade",
+                  value: "\u200b",
+                },
+                {
+                  name: ":classical_building: Overtime market:",
+                  value:
+                      "[" +
+                      marketMessage +
+                      "](https://www.overtimemarkets.xyz/markets/" +
+                      overtimeMarketTrade.marketsData[0].gameId +
+                      ")",
+                },
+                {
+                  name: ":coin: Bet type:",
+                  value: marketType,
+                },
+                {
+                  name: ":coin: Position:",
+                  value: betMessage,
+                },
+                {
+                  name: ":link: Ticket  address:",
+                  value:
+                      "[" +
+                      overtimeMarketTrade.id +
+                      "](" + overtimeLink +
+                      overtimeMarketTrade.id +
+                      ")",
+                },{
+                  name: ":link: Ticket owner:",
+                  value:
+                      "[" +
+                      ticketOwner +
+                      "](" + linkTransaction +
+                      ticketOwner +
+                      ")",
+                },
+                {
+                  name: ":coin: Buy in Amount:",
+                  value: buyIn + " " + moneySymbol
+                },
+                {
+                  name: ":coin: Payout:",
+                  value: roundTo2Decimals(buyIn * odds) + " "+ moneySymbol ,
+                },
+                {
+                  name: ":coin: Fees:",
+                  value: formatV2BASEAmount(overtimeMarketTrade.fees , overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol ,
+                },
+                {
+                  name: ":coin: Odds:",
+                  value: odds,
+                },
+                {
+                  name: ":alarm_clock: Game time:",
+                  value: new Date(overtimeMarketTrade.marketsData[0].maturity * 1000).toUTCString(),
+                },
+                {
+                  name: ":alarm_clock: Timestamp:",
+                  value: new Date(overtimeMarketTrade.createdAt * 1000).toUTCString(),
+                }
+              ],
+            };
+
+          }
+
+          let amountInCurrency = formatV2BASEAmount(overtimeMarketTrade.buyInAmount , overtimeMarketTrade.collateral);
+          let payoutInCurrency = multiplier * roundTo2Decimals(buyIn * odds);
+          let overtimeTradesChannel;
+          if(Number(multiplier*amountInCurrency)<500){
+            if(payoutInCurrency>=1000){
+              overtimeTradesChannel = await clientNewListings.channels
+                  .fetch("1334191185694294076");
+            } else if(overtimeMarketTrade.isLive){
+              overtimeTradesChannel = await clientNewListings.channels
+                  .fetch("1334191049454780478");
+
+            } else {
+              overtimeTradesChannel = await clientNewListings.channels
+                  .fetch("1334190781115928677");
+            }
+          } else{
+            if(overtimeMarketTrade.isLive){
+              overtimeTradesChannel = await clientNewListings.channels
+                  .fetch("1334191112310489210");
+
+            } else {
+              overtimeTradesChannel = await clientNewListings.channels
+                  .fetch("1334190954969825300");
+            }
+          }
+          if(!writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id)){
+            writenOvertimeV2BASETrades.push(overtimeMarketTrade.id);
+            let newVar1 = await redisClient.lpush(writenOvertimeV2BASETrades, overtimeMarketTrade.id);
+            let newVar = await overtimeTradesChannel.send({ embeds: [embed] });
+            console.log("#@#@#@Sending base message: "+JSON.stringify(embed));
+          }
+        } else {
+          let parlayMessage = "";
+          parlayMessage = await getV2ParlayMessage(overtimeMarketTrade, parlayMessage,typeMap);
+          let overtimeLink;
+          overtimeLink = "https://www.overtimemarkets.xyz/tickets/"
+          let linkTransaction = "https://basescan.org/address/";
+          let embed;
+          if(isSystem){
+            embed = {
+              fields: [
+                {
+                  name: "Overtime V2 Market Trade",
+                  value: "\u200b",
+                },
+                {
+                  name: ":classical_building: Overtime market:",
+                  value:
+                      "[" +
+                      parlayMessage +
+                      "](https://www.overtimemarkets.xyz/markets/" +
+                      overtimeMarketTrade.marketsData[0].gameId +
+                      ")",
+                },
+                {
+                  name: ":link: Ticket address:",
+                  value:
+                      "[" +
+                      overtimeMarketTrade.id +
+                      "](" + overtimeLink +
+                      overtimeMarketTrade.id +
+                      ")",
+                },{
+                  name: ":link: Ticket owner:",
+                  value:
+                      "[" +
+                      ticketOwner +
+                      "](" + linkTransaction +
+                      ticketOwner +
+                      ")",
+                },
+                {
+                  name: ":coin: Buy in Amount:",
+                  value: buyIn + " " + moneySymbol
+                },
+                {
+                  name: ":coin: System:",
+                  value: mustWins
+                },
+                {
+                  name: ":coin: Payout:",
+                  value: roundTo2Decimals(buyIn * odds) + " "+ moneySymbol ,
+                },
+                {
+                  name: ":coin: Fees:",
+                  value: formatV2BASEAmount(overtimeMarketTrade.fees , overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol,
+                },
+                {
+                  name: ":coin: Total Quote:",
+                  value: odds,
+                },
+                {
+                  name: ":alarm_clock: End time:",
+                  value: new Date(overtimeMarketTrade.expiry * 1000).toUTCString(),
+                },
+                {
+                  name: ":alarm_clock: Timestamp:",
+                  value: new Date(overtimeMarketTrade.createdAt * 1000).toUTCString(),
+                }
+              ],
+            };
+          } else {
+            embed = {
+              fields: [
+                {
+                  name: "Overtime V2 Market Trade",
+                  value: "\u200b",
+                },
+                {
+                  name: ":classical_building: Overtime market:",
+                  value:
+                      "[" +
+                      parlayMessage +
+                      "](https://www.overtimemarkets.xyz/markets/" +
+                      overtimeMarketTrade.marketsData[0].gameId +
+                      ")",
+                },
+                {
+                  name: ":link: Ticket address:",
+                  value:
+                      "[" +
+                      overtimeMarketTrade.id +
+                      "](" + overtimeLink +
+                      overtimeMarketTrade.id +
+                      ")",
+                },{
+                  name: ":link: Ticket owner:",
+                  value:
+                      "[" +
+                      ticketOwner +
+                      "](" + linkTransaction +
+                      ticketOwner +
+                      ")",
+                },
+                {
+                  name: ":coin: Buy in Amount:",
+                  value: buyIn + " " + moneySymbol
+                },
+                {
+                  name: ":coin: Payout:",
+                  value: roundTo2Decimals(buyIn * odds) + " "+ moneySymbol ,
+                },
+                {
+                  name: ":coin: Fees:",
+                  value: formatV2BASEAmount(overtimeMarketTrade.fees , overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol,
+                },
+                {
+                  name: ":coin: Total Quote:",
+                  value: odds,
+                },
+                {
+                  name: ":alarm_clock: End time:",
+                  value: new Date(overtimeMarketTrade.expiry * 1000).toUTCString(),
+                },
+                {
+                  name: ":alarm_clock: Timestamp:",
+                  value: new Date(overtimeMarketTrade.createdAt * 1000).toUTCString(),
+                }
+              ],
+            };
+          }
+          let amountInCurrency = formatV2BASEAmount(overtimeMarketTrade.buyInAmount , overtimeMarketTrade.collateral)
+          let payoutInCurrency = multiplier * roundTo2Decimals(buyIn * odds);
+          let overtimeTradesChannel;
+          if(Number(multiplier*amountInCurrency)<500){
+            if(payoutInCurrency>=1000){
+              overtimeTradesChannel = await clientNewListings.channels
+                  .fetch("1334191185694294076");
+            } else if(overtimeMarketTrade.isLive){
+              overtimeTradesChannel = await clientNewListings.channels
+                  .fetch("1334191049454780478");
+
+            } else {
+              overtimeTradesChannel = await clientNewListings.channels
+                  .fetch("1334190781115928677");
+            }
+          } else{
+            if(overtimeMarketTrade.isLive){
+              overtimeTradesChannel = await clientNewListings.channels
+                  .fetch("1334191112310489210");
+
+            } else {
+              overtimeTradesChannel = await clientNewListings.channels
+                  .fetch("1334190954969825300");
+            }
+          }
+
+
+          if(!writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id)) {
+            writenOvertimeV2BASETrades.push(overtimeMarketTrade.id);
+            let lpush = await redisClient.lpush(overtimeV2BASETradesKey, overtimeMarketTrade.id);
+            let newVar = await overtimeTradesChannel.send({ embeds: [embed] });
+            console.log("#@#@#@Sending base message: "+JSON.stringify(embed));
+          }
+        }
+
+
+      } catch (e) {
+        console.log("There was a problem while getting overtime V2 trades base #@#@#@@#@",e);
       }
     }
   }
