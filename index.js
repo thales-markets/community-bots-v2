@@ -1003,11 +1003,11 @@ async function getOvertimeV2Trades(){
                 },
                 {
                   name: ":coin: Buy in Amount USD:",
-                  value: (amountInCurrency * multiplier) + " $"
+                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
                 },
                 {
                   name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                  value: roundTo2Decimals(payoutInCurrency ) + " $",
                 },
                 {
                   name: ":coin: Fees:",
@@ -1079,11 +1079,11 @@ async function getOvertimeV2Trades(){
                 },
                 {
                   name: ":coin: Buy in Amount USD:",
-                  value: (amountInCurrency * multiplier) + " $"
+                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
                 },
                 {
                   name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                  value: roundTo2Decimals(payoutInCurrency ) + " $",
                 },
                 {
                   name: ":coin: Fees:",
@@ -1184,11 +1184,11 @@ async function getOvertimeV2Trades(){
                 },
                 {
                   name: ":coin: Buy in Amount USD:",
-                  value: (amountInCurrency * multiplier) + " $"
+                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
                 },
                 {
                   name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                  value: roundTo2Decimals(payoutInCurrency ) + " $",
                 },
                 {
                   name: ":coin: Fees:",
@@ -1251,11 +1251,11 @@ async function getOvertimeV2Trades(){
                 },
                 {
                   name: ":coin: Buy in Amount USD:",
-                  value: (amountInCurrency * multiplier) + " $"
+                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
                 },
                 {
                   name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                  value: roundTo2Decimals(payoutInCurrency ) + " $",
                 },
                 {
                   name: ":coin: Fees:",
@@ -1466,11 +1466,11 @@ async function getOvertimeV2ARBTrades(){
               },
               {
                 name: ":coin: Buy in Amount USD:",
-                value: (amountInCurrency * multiplier) + " $"
+                value: roundTo2Decimals(amountInCurrency * multiplier) + "$"
               },
               {
                 name: ":coin: Payout in USD:",
-                value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                value: roundTo2Decimals(payoutInCurrency ) + " $",
               },
               {
                 name: ":coin: Fees:",
@@ -1542,11 +1542,11 @@ async function getOvertimeV2ARBTrades(){
                 },
                 {
                   name: ":coin: Buy in Amount USD:",
-                  value: (amountInCurrency * multiplier) + " $"
+                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
                 },
                 {
                   name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                  value: roundTo2Decimals(payoutInCurrency ) + " $",
                 },
                 {
                   name: ":coin: Fees:",
@@ -1644,11 +1644,11 @@ async function getOvertimeV2ARBTrades(){
               },
               {
                 name: ":coin: Buy in Amount USD:",
-                value: (amountInCurrency * multiplier) + " $"
+                value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
               },
               {
                 name: ":coin: Payout in USD:",
-                value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                value: roundTo2Decimals(payoutInCurrency ) + " $",
               },
               {
                 name: ":coin: System:",
@@ -1715,11 +1715,11 @@ async function getOvertimeV2ARBTrades(){
                 },
                 {
                   name: ":coin: Buy in Amount USD:",
-                  value: (amountInCurrency * multiplier) + " $"
+                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
                 },
                 {
                   name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                  value: roundTo2Decimals(payoutInCurrency ) + " $",
                 },
                 {
                   name: ":coin: Payout:",
@@ -1912,11 +1912,11 @@ async function getOvertimeV2BASETrades(){
                 ,
                 {
                   name: ":coin: Buy in Amount USD:",
-                  value: (amountInCurrency * multiplier) + " $"
+                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
                 },
                 {
                   name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                  value: roundTo2Decimals(payoutInCurrency ) + " $",
                 },
                 {
                   name: ":coin: Fees:",
@@ -1988,11 +1988,11 @@ async function getOvertimeV2BASETrades(){
                 },
                 {
                   name: ":coin: Buy in Amount USD:",
-                  value: (amountInCurrency * multiplier) + " $"
+                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
                 },
                 {
                   name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                  value: roundTo2Decimals(payoutInCurrency ) + " $",
                 },
                 {
                   name: ":coin: Fees:",
@@ -2098,11 +2098,11 @@ async function getOvertimeV2BASETrades(){
                 },
                 {
                   name: ":coin: Buy in Amount USD:",
-                  value: (amountInCurrency * multiplier) + " $"
+                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
                 },
                 {
                   name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                  value: roundTo2Decimals(payoutInCurrency ) + " $",
                 },
                 {
                   name: ":coin: Fees:",
@@ -2169,11 +2169,11 @@ async function getOvertimeV2BASETrades(){
                 },
                 {
                   name: ":coin: Buy in Amount USD:",
-                  value: (amountInCurrency * multiplier) + " $"
+                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
                 },
                 {
                   name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                  value: roundTo2Decimals(payoutInCurrency ) + " $",
                 },
                 {
                   name: ":coin: Total Quote:",
