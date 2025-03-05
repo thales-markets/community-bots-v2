@@ -115,7 +115,7 @@ function  formatV2BASEAmount(numberForFormating, collateralAddress) {
 
 function  formatV2ARBAmount(numberForFormating, collateralAddress) {
 
-  if(collateralAddress == "0xaf88d065e77c8cC2239327C5EDb3A432268e5831") {
+  if(collateralAddress == "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" || collateralAddress == "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f") {
     return numberForFormating / 1e6;
   } else {
     return numberForFormating / 1e18
@@ -878,14 +878,16 @@ async function getV2ParlayMessage(overtimeMarketTrade, parlayMessage,typeMap) {
 
 async function getOvertimeV2Trades(){
 
-  let activeTickets = await v2Contract.methods.getActiveTickets(0,10000).call();
-  let overtimeTrades;
-  if (activeTickets.length>900){
-    overtimeTrades = await v2TicketContract.methods.getTicketsData(activeTickets.slice(0, 900)).call();
-    overtimeTrades = overtimeTrades.concat(await v2TicketContract.methods.getTicketsData(activeTickets.slice(900, 1800)).call());
-  } else {
-    overtimeTrades = await v2TicketContract.methods.getTicketsData(activeTickets).call();
-  }let typeInfoMap = await axios.get('https://api.thalesmarket.io/overtime-v2/market-types');//api.thalesmarket.io/overtime-v2/market-types;
+  let activeTickets = await v2Contract.methods.getActiveTickets(0, 10000).call();
+  let overtimeTrades = [];
+
+  for (let i = 0; i < activeTickets.length; i += 900) {
+    let chunk = activeTickets.slice(i, i + 900);
+    let chunkData = await v2TicketContract.methods.getTicketsData(chunk).call();
+    overtimeTrades = overtimeTrades.concat(chunkData);
+  }
+
+  let typeInfoMap = await axios.get('https://api.thalesmarket.io/overtime-v2/market-types');//api.thalesmarket.io/overtime-v2/market-types;
   let sportsInfoMap = await axios.get('https://api.thalesmarket.io/overtime-v2/sports');
   typeInfoMap = typeInfoMap.data;
   sportsInfoMap = sportsInfoMap.data;
@@ -935,7 +937,9 @@ async function getOvertimeV2Trades(){
           moneySymbol = "USDC"
         }
         let buyIn = roundTo2Decimals(formatV2Amount(overtimeMarketTrade.buyInAmount , overtimeMarketTrade.collateral));
-        let odds = oddslib.from('impliedProbability', overtimeMarketTrade.totalQuote / 1e18).decimalValue.toFixed(3)
+        let odds = oddslib.from('impliedProbability', overtimeMarketTrade.totalQuote / 1e18).decimalValue.toFixed(3);
+        let amountInCurrency = formatV2Amount(overtimeMarketTrade.buyInAmount , overtimeMarketTrade.collateral)
+        let payoutInCurrency = multiplier * roundTo2Decimals(buyIn * odds);
         if (overtimeMarketTrade.marketsData.length==1) {
           let {marketType, marketMessage, betMessage} = await getV2MessageContent(overtimeMarketTrade,typeMap);
 
@@ -996,6 +1000,14 @@ async function getOvertimeV2Trades(){
                 {
                   name: ":coin: Payout:",
                   value: roundTo2Decimals(buyIn * odds) + " " + moneySymbol,
+                },
+                {
+                  name: ":coin: Buy in Amount USD:",
+                  value: (amountInCurrency * multiplier) + " $"
+                },
+                {
+                  name: ":coin: Payout in USD:",
+                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
                 },
                 {
                   name: ":coin: Fees:",
@@ -1066,6 +1078,14 @@ async function getOvertimeV2Trades(){
                   value: roundTo2Decimals(buyIn * odds) + " " + moneySymbol,
                 },
                 {
+                  name: ":coin: Buy in Amount USD:",
+                  value: (amountInCurrency * multiplier) + " $"
+                },
+                {
+                  name: ":coin: Payout in USD:",
+                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                },
+                {
                   name: ":coin: Fees:",
                   value: formatV2Amount(overtimeMarketTrade.fees, overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol,
                 },
@@ -1084,8 +1104,6 @@ async function getOvertimeV2Trades(){
               ],
             };
           }
-          let amountInCurrency = formatV2Amount(overtimeMarketTrade.buyInAmount , overtimeMarketTrade.collateral);
-          let payoutInCurrency =  multiplier * roundTo2Decimals(buyIn * odds);
           let overtimeTradesChannel;
           if(Number(multiplier*amountInCurrency)<500){
             if(payoutInCurrency>=1000){
@@ -1165,6 +1183,14 @@ async function getOvertimeV2Trades(){
                   value: roundTo2Decimals(buyIn * odds) + " " + moneySymbol,
                 },
                 {
+                  name: ":coin: Buy in Amount USD:",
+                  value: (amountInCurrency * multiplier) + " $"
+                },
+                {
+                  name: ":coin: Payout in USD:",
+                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                },
+                {
                   name: ":coin: Fees:",
                   value: formatV2Amount(overtimeMarketTrade.fees, overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol,
                 },
@@ -1224,6 +1250,14 @@ async function getOvertimeV2Trades(){
                   value: roundTo2Decimals(buyIn * odds) + " " + moneySymbol,
                 },
                 {
+                  name: ":coin: Buy in Amount USD:",
+                  value: (amountInCurrency * multiplier) + " $"
+                },
+                {
+                  name: ":coin: Payout in USD:",
+                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                },
+                {
                   name: ":coin: Fees:",
                   value: formatV2Amount(overtimeMarketTrade.fees, overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol,
                 },
@@ -1242,8 +1276,6 @@ async function getOvertimeV2Trades(){
               ],
             };
           }
-          let amountInCurrency = formatV2Amount(overtimeMarketTrade.buyInAmount , overtimeMarketTrade.collateral)
-          let payoutInCurrency = multiplier * roundTo2Decimals(buyIn * odds);
           let overtimeTradesChannel;
 
           if(Number(multiplier*amountInCurrency)<500){
@@ -1286,6 +1318,7 @@ async function getOvertimeV2Trades(){
 
 let thalesPrice = 0.22;
 let ethPrice = 3000;
+let bitcoinPrice = 89000;
 
 async function updateTokenPrice() {
 
@@ -1297,6 +1330,10 @@ async function updateTokenPrice() {
   let dataETH = await CoinGeckoClient.coins.fetch("ethereum");
   if(dataETH.data && dataETH.data.market_data) {
     ethPrice =   dataETH.data.market_data.current_price.usd;
+  }
+  let dataBTC = await CoinGeckoClient.coins.fetch("bitcoin");
+  if(dataBTC.data && dataBTC.data.market_data) {
+    bitcoinPrice  =  dataBTC.data.market_data.current_price.usd;
   }
 }
 
@@ -1346,6 +1383,9 @@ async function getOvertimeV2ARBTrades(){
         } else if (overtimeMarketTrade.collateral=="0xE85B662Fe97e8562f4099d8A1d5A92D4B453bF30"){
           moneySymbol = "THALES";
           multiplier = thalesPrice;
+        } else if (overtimeMarketTrade.collateral=="0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f"){
+          moneySymbol = "wBTC";
+          multiplier = bitcoinPrice;
         } else {
           moneySymbol = "USDC";
         }
@@ -1361,7 +1401,9 @@ async function getOvertimeV2ARBTrades(){
         }
 
         let buyIn = roundTo2Decimals(formatV2ARBAmount(overtimeMarketTrade.buyInAmount , overtimeMarketTrade.collateral));
-        let odds = oddslib.from('impliedProbability', overtimeMarketTrade.totalQuote / 1e18).decimalValue.toFixed(3)
+        let odds = oddslib.from('impliedProbability', overtimeMarketTrade.totalQuote / 1e18).decimalValue.toFixed(3);
+        let amountInCurrency = formatV2ARBAmount(overtimeMarketTrade.buyInAmount , overtimeMarketTrade.collateral);
+        let payoutInCurrency = multiplier * roundTo2Decimals(buyIn * odds);
         if (overtimeMarketTrade.marketsData.length==1) {
           let {marketType, marketMessage, betMessage} = await getV2MessageContent(overtimeMarketTrade,typeMap);
 
@@ -1421,6 +1463,14 @@ async function getOvertimeV2ARBTrades(){
               {
                 name: ":coin: Payout:",
                 value: roundTo2Decimals(buyIn * odds) + " "+ moneySymbol ,
+              },
+              {
+                name: ":coin: Buy in Amount USD:",
+                value: (amountInCurrency * multiplier) + " $"
+              },
+              {
+                name: ":coin: Payout in USD:",
+                value: roundTo2Decimals(payoutInCurrency * odds) + " $",
               },
               {
                 name: ":coin: Fees:",
@@ -1491,6 +1541,14 @@ async function getOvertimeV2ARBTrades(){
                   value: roundTo2Decimals(buyIn * odds) + " "+ moneySymbol ,
                 },
                 {
+                  name: ":coin: Buy in Amount USD:",
+                  value: (amountInCurrency * multiplier) + " $"
+                },
+                {
+                  name: ":coin: Payout in USD:",
+                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                },
+                {
                   name: ":coin: Fees:",
                   value: formatV2ARBAmount(overtimeMarketTrade.fees , overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol ,
                 },
@@ -1511,9 +1569,7 @@ async function getOvertimeV2ARBTrades(){
 
           }
 
-          let amountInCurrency = formatV2ARBAmount(overtimeMarketTrade.buyInAmount , overtimeMarketTrade.collateral);
-          let payoutInCurrency = multiplier * roundTo2Decimals(buyIn * odds);
-          let overtimeTradesChannel;
+         let overtimeTradesChannel;
           if(Number(multiplier*amountInCurrency)<500){
             if(payoutInCurrency>=1000){
                overtimeTradesChannel = await clientNewListings.channels
@@ -1587,6 +1643,14 @@ async function getOvertimeV2ARBTrades(){
                 value: buyIn + " " + moneySymbol
               },
               {
+                name: ":coin: Buy in Amount USD:",
+                value: (amountInCurrency * multiplier) + " $"
+              },
+              {
+                name: ":coin: Payout in USD:",
+                value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+              },
+              {
                 name: ":coin: System:",
                 value: mustWins
               },
@@ -1650,6 +1714,14 @@ async function getOvertimeV2ARBTrades(){
                   value: buyIn + " " + moneySymbol
                 },
                 {
+                  name: ":coin: Buy in Amount USD:",
+                  value: (amountInCurrency * multiplier) + " $"
+                },
+                {
+                  name: ":coin: Payout in USD:",
+                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                },
+                {
                   name: ":coin: Payout:",
                   value: roundTo2Decimals(buyIn * odds) + " "+ moneySymbol ,
                 },
@@ -1672,8 +1744,6 @@ async function getOvertimeV2ARBTrades(){
               ],
             };
           }
-          let amountInCurrency = formatV2ARBAmount(overtimeMarketTrade.buyInAmount , overtimeMarketTrade.collateral)
-          let payoutInCurrency = multiplier * roundTo2Decimals(buyIn * odds);
           let overtimeTradesChannel;
           if(Number(multiplier*amountInCurrency)<500){
             if(payoutInCurrency>=1000){
@@ -1757,6 +1827,9 @@ async function getOvertimeV2BASETrades(){
         } else if (overtimeMarketTrade.collateral=="0x1527d463cC46686f815551314BD0E5Af253d58C0"){
           moneySymbol = "OVER";
           multiplier = thalesPrice;
+        } else if (overtimeMarketTrade.collateral=="0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"){
+          moneySymbol = "cbBTC";
+          multiplier = bitcoinPrice;
         } else {
           moneySymbol = "USDC";
         }
@@ -1772,7 +1845,10 @@ async function getOvertimeV2BASETrades(){
         }
 
         let buyIn = roundTo2Decimals(formatV2BASEAmount(overtimeMarketTrade.buyInAmount , overtimeMarketTrade.collateral));
-        let odds = oddslib.from('impliedProbability', overtimeMarketTrade.totalQuote / 1e18).decimalValue.toFixed(3)
+        let odds = oddslib.from('impliedProbability', overtimeMarketTrade.totalQuote / 1e18).decimalValue.toFixed(3);
+        let amountInCurrency = formatV2BASEAmount(overtimeMarketTrade.buyInAmount , overtimeMarketTrade.collateral);
+        let payoutInCurrency = multiplier * roundTo2Decimals(buyIn * odds);
+
         if (overtimeMarketTrade.marketsData.length==1) {
           let {marketType, marketMessage, betMessage} = await getV2MessageContent(overtimeMarketTrade,typeMap);
 
@@ -1832,6 +1908,15 @@ async function getOvertimeV2BASETrades(){
                 {
                   name: ":coin: Payout:",
                   value: roundTo2Decimals(buyIn * odds) + " "+ moneySymbol ,
+                },
+                ,
+                {
+                  name: ":coin: Buy in Amount USD:",
+                  value: (amountInCurrency * multiplier) + " $"
+                },
+                {
+                  name: ":coin: Payout in USD:",
+                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
                 },
                 {
                   name: ":coin: Fees:",
@@ -1902,6 +1987,14 @@ async function getOvertimeV2BASETrades(){
                   value: roundTo2Decimals(buyIn * odds) + " "+ moneySymbol ,
                 },
                 {
+                  name: ":coin: Buy in Amount USD:",
+                  value: (amountInCurrency * multiplier) + " $"
+                },
+                {
+                  name: ":coin: Payout in USD:",
+                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                },
+                {
                   name: ":coin: Fees:",
                   value: formatV2BASEAmount(overtimeMarketTrade.fees , overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol ,
                 },
@@ -1922,8 +2015,6 @@ async function getOvertimeV2BASETrades(){
 
           }
 
-          let amountInCurrency = formatV2BASEAmount(overtimeMarketTrade.buyInAmount , overtimeMarketTrade.collateral);
-          let payoutInCurrency = multiplier * roundTo2Decimals(buyIn * odds);
           let overtimeTradesChannel;
           if(Number(multiplier*amountInCurrency)<500){
             if(payoutInCurrency>=1000){
@@ -2006,6 +2097,14 @@ async function getOvertimeV2BASETrades(){
                   value: roundTo2Decimals(buyIn * odds) + " "+ moneySymbol ,
                 },
                 {
+                  name: ":coin: Buy in Amount USD:",
+                  value: (amountInCurrency * multiplier) + " $"
+                },
+                {
+                  name: ":coin: Payout in USD:",
+                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                },
+                {
                   name: ":coin: Fees:",
                   value: formatV2BASEAmount(overtimeMarketTrade.fees , overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol,
                 },
@@ -2069,6 +2168,14 @@ async function getOvertimeV2BASETrades(){
                   value: formatV2BASEAmount(overtimeMarketTrade.fees , overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol,
                 },
                 {
+                  name: ":coin: Buy in Amount USD:",
+                  value: (amountInCurrency * multiplier) + " $"
+                },
+                {
+                  name: ":coin: Payout in USD:",
+                  value: roundTo2Decimals(payoutInCurrency * odds) + " $",
+                },
+                {
                   name: ":coin: Total Quote:",
                   value: odds,
                 },
@@ -2083,8 +2190,6 @@ async function getOvertimeV2BASETrades(){
               ],
             };
           }
-          let amountInCurrency = formatV2BASEAmount(overtimeMarketTrade.buyInAmount , overtimeMarketTrade.collateral)
-          let payoutInCurrency = multiplier * roundTo2Decimals(buyIn * odds);
           let overtimeTradesChannel;
           if(Number(multiplier*amountInCurrency)<500){
             if(payoutInCurrency>=1000){
