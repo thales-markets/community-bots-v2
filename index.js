@@ -107,7 +107,9 @@ function  formatV2BASEAmount(numberForFormating, collateralAddress) {
 
   if(collateralAddress == "0x4200000000000000000000000000000000000006" || collateralAddress == "0x1527d463cC46686f815551314BD0E5Af253d58C0") {
     return numberForFormating / 1e18;
-  } else {
+  } else if(collateralAddress == "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"){
+    return numberForFormating / 1e8;
+  }else {
     return numberForFormating / 1e6
   }
 }
@@ -115,9 +117,11 @@ function  formatV2BASEAmount(numberForFormating, collateralAddress) {
 
 function  formatV2ARBAmount(numberForFormating, collateralAddress) {
 
-  if(collateralAddress == "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" || collateralAddress == "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f") {
+  if(collateralAddress == "0xaf88d065e77c8cC2239327C5EDb3A432268e5831") {
     return numberForFormating / 1e6;
-  } else {
+  } else if(collateralAddress == "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f"){
+    return numberForFormating / 1e8;
+  }else {
     return numberForFormating / 1e18
   }
 }
@@ -1002,14 +1006,6 @@ async function getOvertimeV2Trades(){
                   value: roundTo2Decimals(buyIn * odds) + " " + moneySymbol,
                 },
                 {
-                  name: ":coin: Buy in Amount USD:",
-                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
-                },
-                {
-                  name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency ) + " $",
-                },
-                {
                   name: ":coin: Fees:",
                   value: formatV2Amount(overtimeMarketTrade.fees, overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol,
                 },
@@ -1078,14 +1074,6 @@ async function getOvertimeV2Trades(){
                   value: roundTo2Decimals(buyIn * odds) + " " + moneySymbol,
                 },
                 {
-                  name: ":coin: Buy in Amount USD:",
-                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
-                },
-                {
-                  name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency ) + " $",
-                },
-                {
                   name: ":coin: Fees:",
                   value: formatV2Amount(overtimeMarketTrade.fees, overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol,
                 },
@@ -1124,6 +1112,19 @@ async function getOvertimeV2Trades(){
              overtimeTradesChannel = await clientNewListings.channels
                 .fetch("1249389262089228309");
             }
+          }
+
+          if (multiplier !== 1) {
+            embed.fields.push(
+                {
+                  name: ":coin: Buy in Amount USD:",
+                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $",
+                },
+                {
+                  name: ":coin: Payout in USD:",
+                  value: roundTo2Decimals(payoutInCurrency) + " $",
+                }
+            );
           }
           await overtimeTradesChannel.send({embeds: [embed]});
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
@@ -1183,14 +1184,6 @@ async function getOvertimeV2Trades(){
                   value: roundTo2Decimals(buyIn * odds) + " " + moneySymbol,
                 },
                 {
-                  name: ":coin: Buy in Amount USD:",
-                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
-                },
-                {
-                  name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency ) + " $",
-                },
-                {
                   name: ":coin: Fees:",
                   value: formatV2Amount(overtimeMarketTrade.fees, overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol,
                 },
@@ -1250,14 +1243,6 @@ async function getOvertimeV2Trades(){
                   value: roundTo2Decimals(buyIn * odds) + " " + moneySymbol,
                 },
                 {
-                  name: ":coin: Buy in Amount USD:",
-                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
-                },
-                {
-                  name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency ) + " $",
-                },
-                {
                   name: ":coin: Fees:",
                   value: formatV2Amount(overtimeMarketTrade.fees, overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol,
                 },
@@ -1297,6 +1282,18 @@ async function getOvertimeV2Trades(){
                 .fetch("1249389262089228309");
           }}
 
+            if (multiplier !== 1) {
+              embed.fields.push(
+                  {
+                    name: ":coin: Buy in Amount USD:",
+                    value: roundTo2Decimals(amountInCurrency * multiplier) + " $",
+                  },
+                  {
+                    name: ":coin: Payout in USD:",
+                    value: roundTo2Decimals(payoutInCurrency) + " $",
+                  }
+              );
+            }
           await overtimeTradesChannel.send({embeds: [embed]});
 
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
@@ -1465,14 +1462,6 @@ async function getOvertimeV2ARBTrades(){
                 value: roundTo2Decimals(buyIn * odds) + " "+ moneySymbol ,
               },
               {
-                name: ":coin: Buy in Amount USD:",
-                value: roundTo2Decimals(amountInCurrency * multiplier) + "$"
-              },
-              {
-                name: ":coin: Payout in USD:",
-                value: roundTo2Decimals(payoutInCurrency ) + " $",
-              },
-              {
                 name: ":coin: Fees:",
                 value: formatV2ARBAmount(overtimeMarketTrade.fees , overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol ,
               },
@@ -1541,14 +1530,6 @@ async function getOvertimeV2ARBTrades(){
                   value: roundTo2Decimals(buyIn * odds) + " "+ moneySymbol ,
                 },
                 {
-                  name: ":coin: Buy in Amount USD:",
-                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
-                },
-                {
-                  name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency ) + " $",
-                },
-                {
                   name: ":coin: Fees:",
                   value: formatV2ARBAmount(overtimeMarketTrade.fees , overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol ,
                 },
@@ -1595,6 +1576,18 @@ async function getOvertimeV2ARBTrades(){
           if(!writenOvertimeV2ARBTrades.includes(overtimeMarketTrade.id)){
           writenOvertimeV2ARBTrades.push(overtimeMarketTrade.id);
           let newVar1 = await redisClient.lpush(overtimeV2ARBTradesKey, overtimeMarketTrade.id);
+            if (multiplier !== 1) {
+              embed.fields.push(
+                  {
+                    name: ":coin: Buy in Amount USD:",
+                    value: roundTo2Decimals(amountInCurrency * multiplier) + " $",
+                  },
+                  {
+                    name: ":coin: Payout in USD:",
+                    value: roundTo2Decimals(payoutInCurrency) + " $",
+                  }
+              );
+            }
           let newVar = await overtimeTradesChannel.send({ embeds: [embed] });
           console.log("#@#@#@Sending arb message: "+JSON.stringify(embed));
           }
@@ -1714,14 +1707,6 @@ async function getOvertimeV2ARBTrades(){
                   value: buyIn + " " + moneySymbol
                 },
                 {
-                  name: ":coin: Buy in Amount USD:",
-                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
-                },
-                {
-                  name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency ) + " $",
-                },
-                {
                   name: ":coin: Payout:",
                   value: roundTo2Decimals(buyIn * odds) + " "+ moneySymbol ,
                 },
@@ -1769,6 +1754,18 @@ async function getOvertimeV2ARBTrades(){
           if(!writenOvertimeV2ARBTrades.includes(overtimeMarketTrade.id)) {
             writenOvertimeV2ARBTrades.push(overtimeMarketTrade.id);
             let lpush = await redisClient.lpush(overtimeV2ARBTradesKey, overtimeMarketTrade.id);
+            if (multiplier !== 1) {
+              embed.fields.push(
+                  {
+                    name: ":coin: Buy in Amount USD:",
+                    value: roundTo2Decimals(amountInCurrency * multiplier) + " $",
+                  },
+                  {
+                    name: ":coin: Payout in USD:",
+                    value: roundTo2Decimals(payoutInCurrency) + " $",
+                  }
+              );
+            }
            let newVar = await overtimeTradesChannel.send({ embeds: [embed] });
             console.log("#@#@#@Sending arb message: "+JSON.stringify(embed));
           }
@@ -1911,14 +1908,6 @@ async function getOvertimeV2BASETrades(){
                 },
                 ,
                 {
-                  name: ":coin: Buy in Amount USD:",
-                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
-                },
-                {
-                  name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency ) + " $",
-                },
-                {
                   name: ":coin: Fees:",
                   value: formatV2BASEAmount(overtimeMarketTrade.fees , overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol ,
                 },
@@ -1987,14 +1976,6 @@ async function getOvertimeV2BASETrades(){
                   value: roundTo2Decimals(buyIn * odds) + " "+ moneySymbol ,
                 },
                 {
-                  name: ":coin: Buy in Amount USD:",
-                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
-                },
-                {
-                  name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency ) + " $",
-                },
-                {
                   name: ":coin: Fees:",
                   value: formatV2BASEAmount(overtimeMarketTrade.fees , overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol ,
                 },
@@ -2041,6 +2022,18 @@ async function getOvertimeV2BASETrades(){
           if(!writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id)){
             writenOvertimeV2BASETrades.push(overtimeMarketTrade.id);
             let newVar1 = await redisClient.lpush(writenOvertimeV2BASETrades, overtimeMarketTrade.id);
+            if (multiplier !== 1) {
+              embed.fields.push(
+                  {
+                    name: ":coin: Buy in Amount USD:",
+                    value: roundTo2Decimals(amountInCurrency * multiplier) + " $",
+                  },
+                  {
+                    name: ":coin: Payout in USD:",
+                    value: roundTo2Decimals(payoutInCurrency) + " $",
+                  }
+              );
+            }
             let newVar = await overtimeTradesChannel.send({ embeds: [embed] });
             console.log("#@#@#@Sending base message: "+JSON.stringify(embed));
           }
@@ -2095,14 +2088,6 @@ async function getOvertimeV2BASETrades(){
                 {
                   name: ":coin: Payout:",
                   value: roundTo2Decimals(buyIn * odds) + " "+ moneySymbol ,
-                },
-                {
-                  name: ":coin: Buy in Amount USD:",
-                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
-                },
-                {
-                  name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency ) + " $",
                 },
                 {
                   name: ":coin: Fees:",
@@ -2168,14 +2153,6 @@ async function getOvertimeV2BASETrades(){
                   value: formatV2BASEAmount(overtimeMarketTrade.fees , overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol,
                 },
                 {
-                  name: ":coin: Buy in Amount USD:",
-                  value: roundTo2Decimals(amountInCurrency * multiplier) + " $"
-                },
-                {
-                  name: ":coin: Payout in USD:",
-                  value: roundTo2Decimals(payoutInCurrency ) + " $",
-                },
-                {
                   name: ":coin: Total Quote:",
                   value: odds,
                 },
@@ -2218,6 +2195,18 @@ async function getOvertimeV2BASETrades(){
           if(!writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id)) {
             writenOvertimeV2BASETrades.push(overtimeMarketTrade.id);
             let lpush = await redisClient.lpush(overtimeV2BASETradesKey, overtimeMarketTrade.id);
+            if (multiplier !== 1) {
+              embed.fields.push(
+                  {
+                    name: ":coin: Buy in Amount USD:",
+                    value: roundTo2Decimals(amountInCurrency * multiplier) + " $",
+                  },
+                  {
+                    name: ":coin: Payout in USD:",
+                    value: roundTo2Decimals(payoutInCurrency) + " $",
+                  }
+              );
+            }
             let newVar = await overtimeTradesChannel.send({ embeds: [embed] });
             console.log("#@#@#@Sending base message: "+JSON.stringify(embed));
           }
