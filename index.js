@@ -94,20 +94,28 @@ if (process.env.REDIS_URL) {
 
 }
 
+const WETH_ADDRESS_BASE = "0x4200000000000000000000000000000000000006";
+
+const THALES_ADDRESS_OP = "0x217D47011b23BB961eB6D93cA9945B7501a5BB11";
+
 function  formatV2Amount(numberForFormating, collateralAddress) {
 
-  if(collateralAddress == "0x4200000000000000000000000000000000000006" || collateralAddress == "0x217D47011b23BB961eB6D93cA9945B7501a5BB11") {
+  if(collateralAddress == WETH_ADDRESS_BASE || collateralAddress == THALES_ADDRESS_OP || collateralAddress == OVER_ADDRESS_OP) {
     return numberForFormating / 1e18;
   } else {
     return numberForFormating / 1e6
   }
 }
 
+const THALES_ADDRESS_BASE = "0x1527d463cC46686f815551314BD0E5Af253d58C0";
+
+const BITCOIN_ADDRESS_BASE = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf";
+
 function  formatV2BASEAmount(numberForFormating, collateralAddress) {
 
-  if(collateralAddress == "0x4200000000000000000000000000000000000006" || collateralAddress == "0x1527d463cC46686f815551314BD0E5Af253d58C0") {
+  if(collateralAddress == WETH_ADDRESS_BASE || collateralAddress == THALES_ADDRESS_BASE || collateralAddress == OVER_ADDRESS_BASE) {
     return numberForFormating / 1e18;
-  } else if(collateralAddress == "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"){
+  } else if(collateralAddress == BITCOIN_ADDRESS_BASE){
     return numberForFormating / 1e8;
   }else {
     return numberForFormating / 1e6
@@ -115,11 +123,13 @@ function  formatV2BASEAmount(numberForFormating, collateralAddress) {
 }
 
 
+const BITCOIN_ADDRESS_ARB = "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f";
+
 function  formatV2ARBAmount(numberForFormating, collateralAddress) {
 
   if(collateralAddress == "0xaf88d065e77c8cC2239327C5EDb3A432268e5831") {
     return numberForFormating / 1e6;
-  } else if(collateralAddress == "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f"){
+  } else if(collateralAddress == BITCOIN_ADDRESS_ARB){
     return numberForFormating / 1e8;
   }else {
     return numberForFormating / 1e18
@@ -408,6 +418,11 @@ async function getV2MessageContent(overtimeMarketTrade,typeMap) {
     marketMessage = homeTeam + " - " + awayTeam;
   }
 
+  if(!marketMessage){
+    console.log("### Market message is empty for id "+overtimeMarketTrade.id);
+    marketMessage = "overtime"
+  }
+
   let marketId = typeMap.get(overtimeMarketTrade.marketsData[0].typeId).id;
   let betMessage;
   if (WINNER.includes(marketId)) {
@@ -476,16 +491,16 @@ async function getV2MessageContent(overtimeMarketTrade,typeMap) {
         }
       } else {
         if (overtimeMarketTrade.marketsData[0].typeId == "10001") {
-          betMessage = "H2(" + overtimeMarketTrade.marketsData[0].line / 100 + ") games"
+          betMessage = "H2(" + (-overtimeMarketTrade.marketsData[0].line / 100) + ") games"
         } else {
-          betMessage = "H2(" + overtimeMarketTrade.marketsData[0].line / 100 + ") sets"
+          betMessage = "H2(" + (-overtimeMarketTrade.marketsData[0].line / 100) + ") sets"
         }
       }
     } else {
       if (position == 0) {
         betMessage = "H1(" + overtimeMarketTrade.marketsData[0].line / 100 + ")";
       } else {
-        betMessage = "H2(" + overtimeMarketTrade.marketsData[0].line / 100 + ")";
+        betMessage = "H2(" + (-overtimeMarketTrade.marketsData[0].line / 100) + ")";
       }
     }
   } else if (TOTAL.includes(marketId)) {
@@ -628,6 +643,7 @@ async function getV2MessageContent(overtimeMarketTrade,typeMap) {
       betMessage = "NO" + points;
     }
   }
+
   return {marketType, marketMessage, betMessage};
 }
 
@@ -731,16 +747,16 @@ async function getV2ParlayMessage(overtimeMarketTrade, parlayMessage,typeMap) {
             }
           } else {
             if (marketsData.typeId == "10001") {
-              betMessage = "H2(" + marketsData.line / 100 + ") games"
+              betMessage = "H2(" + (-marketsData.line / 100) + ") games"
             } else {
-              betMessage = "H2(" + marketsData.line / 100 + ") sets"
+              betMessage = "H2(" + (-marketsData.line / 100) + ") sets"
             }
           }
         } else {
           if (position == 0) {
             betMessage = "H1(" + marketsData.line / 100 + ")";
           } else {
-            betMessage = "H2(" + marketsData.line / 100 + ")";
+            betMessage = "H2(" + (-marketsData.line / 100) + ")";
           }
         }
       } else if (TOTAL.includes(marketId)) {
@@ -877,8 +893,14 @@ async function getV2ParlayMessage(overtimeMarketTrade, parlayMessage,typeMap) {
       parlayMessage = parlayMessage + homeTeam + " - " + awayTeam + " : " + marketType + " @ " + betMessage + "\n";
     }
   }
+  if(!parlayMessage){
+    console.log("### Parlay message is empty for id "+overtimeMarketTrade.id);
+    parlayMessage = "overtime parlay";
+  }
   return parlayMessage;
 }
+
+const OVER_ADDRESS_OP = "0xedf38688b27036816a50185caa430d5479e1c63e";
 
 async function getOvertimeV2Trades(){
 
@@ -931,11 +953,14 @@ async function getOvertimeV2Trades(){
         }
         let moneySymbol;
         let multiplier = 1;
-        if (overtimeMarketTrade.collateral=="0x4200000000000000000000000000000000000006"){
+        if (overtimeMarketTrade.collateral==WETH_ADDRESS_BASE){
           moneySymbol = "weth";
           multiplier = ethPrice;
-        } else if (overtimeMarketTrade.collateral=="0x217D47011b23BB961eB6D93cA9945B7501a5BB11"){
+        } else if (overtimeMarketTrade.collateral== THALES_ADDRESS_OP){
           moneySymbol = "THALES";
+          multiplier = thalesPrice;
+        } else if (overtimeMarketTrade.collateral== OVER_ADDRESS_OP){
+          moneySymbol = "OVER";
           multiplier = thalesPrice;
         } else {
           moneySymbol = "USDC"
@@ -1005,10 +1030,6 @@ async function getOvertimeV2Trades(){
                       ")",
                 },
                 {
-                  name: ":coin: is SGP:",
-                  value: isSGP
-                },
-                {
                   name: ":coin: Buy in Amount:",
                   value: buyIn + " " + moneySymbol + buyInAmountUSD
                 },
@@ -1077,10 +1098,6 @@ async function getOvertimeV2Trades(){
                       ")",
                 },
                 {
-                  name: ":coin: is SGP:",
-                  value: isSGP
-                },
-                {
                   name: ":coin: Buy in Amount:",
                   value: buyIn + " " + moneySymbol + buyInAmountUSD
                 },
@@ -1128,7 +1145,14 @@ async function getOvertimeV2Trades(){
                 .fetch("1249389262089228309");
             }
           }
-
+          if(isSGP){
+            embed.fields.push(
+                {
+                  name: ":coin: SGP:",
+                  value: isSGP,
+                }
+            );
+          }
           await overtimeTradesChannel.send({embeds: [embed]});
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
           redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
@@ -1177,9 +1201,6 @@ async function getOvertimeV2Trades(){
                 {
                   name: ":coin: System:",
                   value: mustWins
-                },{
-                  name: ":coin: is SGP:",
-                  value: isSGP
                 },
                 {
                   name: ":coin: Buy in Amount:",
@@ -1239,9 +1260,6 @@ async function getOvertimeV2Trades(){
                       "](" + linkTransaction +
                       ticketOwner +
                       ")",
-                },{
-                  name: ":coin: is SGP:",
-                  value: isSGP
                 },
                 {
                   name: ":coin: Buy in Amount:",
@@ -1290,7 +1308,14 @@ async function getOvertimeV2Trades(){
              overtimeTradesChannel = await clientNewListings.channels
                 .fetch("1249389262089228309");
           }}
-
+          if(isSGP){
+            embed.fields.push(
+                {
+                  name: ":coin: SGP:",
+                  value: isSGP,
+                }
+            );
+          }
           await overtimeTradesChannel.send({embeds: [embed]});
 
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
@@ -1332,6 +1357,12 @@ async function updateTokenPrice() {
 }
 
 
+const WETH_ADDRESS_ARB = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
+
+const THALES_ADDRESS_ARB = "0xE85B662Fe97e8562f4099d8A1d5A92D4B453bF30";
+
+const OVER_ADDRESS_ARB = "0x5829d6fe7528bc8e92c4e81cc8f20a528820b51a";
+
 async function getOvertimeV2ARBTrades(){
 
   let activeTickets = await v2ARBContract.methods.getActiveTickets(0,10000).call();
@@ -1371,13 +1402,16 @@ async function getOvertimeV2ARBTrades(){
 
         let moneySymbol;
         let multiplier = 1;
-        if (overtimeMarketTrade.collateral=="0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"){
+        if (overtimeMarketTrade.collateral== WETH_ADDRESS_ARB){
           moneySymbol = "weth";
           multiplier = ethPrice;
-        } else if (overtimeMarketTrade.collateral=="0xE85B662Fe97e8562f4099d8A1d5A92D4B453bF30"){
+        } else if (overtimeMarketTrade.collateral== THALES_ADDRESS_ARB){
           moneySymbol = "THALES";
           multiplier = thalesPrice;
-        } else if (overtimeMarketTrade.collateral=="0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f"){
+        } else if (overtimeMarketTrade.collateral== OVER_ADDRESS_ARB){
+          moneySymbol = "OVER";
+          multiplier = thalesPrice;
+        } else if (overtimeMarketTrade.collateral== BITCOIN_ADDRESS_ARB){
           moneySymbol = "wBTC";
           multiplier = bitcoinPrice;
         } else {
@@ -1456,9 +1490,6 @@ async function getOvertimeV2ARBTrades(){
               {
                 name: ":coin: System:",
                 value: mustWins
-              },{
-                name: ":coin: is SGP:",
-                value: isSGP
               },
               {
                 name: ":coin: Buy in Amount:",
@@ -1527,9 +1558,6 @@ async function getOvertimeV2ARBTrades(){
                       "](" + linkTransaction +
                       ticketOwner +
                       ")",
-                },{
-                  name: ":coin: is SGP:",
-                  value: isSGP
                 },
                 {
                   name: ":coin: Buy in Amount:",
@@ -1586,6 +1614,14 @@ async function getOvertimeV2ARBTrades(){
           if(!writenOvertimeV2ARBTrades.includes(overtimeMarketTrade.id)){
           writenOvertimeV2ARBTrades.push(overtimeMarketTrade.id);
           let newVar1 = await redisClient.lpush(overtimeV2ARBTradesKey, overtimeMarketTrade.id);
+            if(isSGP){
+              embed.fields.push(
+                  {
+                    name: ":coin: SGP:",
+                    value: isSGP,
+                  }
+              );
+            }
           let newVar = await overtimeTradesChannel.send({ embeds: [embed] });
           console.log("#@#@#@Sending arb message: "+JSON.stringify(embed));
           }
@@ -1628,9 +1664,6 @@ async function getOvertimeV2ARBTrades(){
                     "](" + linkTransaction +
                     ticketOwner +
                     ")",
-              },{
-                name: ":coin: is SGP:",
-                value: isSGP
               },
               {
                 name: ":coin: Buy in Amount:",
@@ -1694,9 +1727,6 @@ async function getOvertimeV2ARBTrades(){
                       "](" + linkTransaction +
                       ticketOwner +
                       ")",
-                },{
-                  name: ":coin: is SGP:",
-                  value: isSGP
                 },
                 {
                   name: ":coin: Buy in Amount:",
@@ -1750,6 +1780,14 @@ async function getOvertimeV2ARBTrades(){
           if(!writenOvertimeV2ARBTrades.includes(overtimeMarketTrade.id)) {
             writenOvertimeV2ARBTrades.push(overtimeMarketTrade.id);
             let lpush = await redisClient.lpush(overtimeV2ARBTradesKey, overtimeMarketTrade.id);
+            if(isSGP){
+              embed.fields.push(
+                  {
+                    name: ":coin: SGP:",
+                    value: isSGP,
+                  }
+              );
+            }
            let newVar = await overtimeTradesChannel.send({ embeds: [embed] });
             console.log("#@#@#@Sending arb message: "+JSON.stringify(embed));
           }
@@ -1763,6 +1801,8 @@ async function getOvertimeV2ARBTrades(){
   }
 }
 
+
+const OVER_ADDRESS_BASE = "0x7750c092e284e2c7366f50c8306f43c7eb2e82a2";
 
 async function getOvertimeV2BASETrades(){
 
@@ -1802,13 +1842,16 @@ async function getOvertimeV2BASETrades(){
         let moneySymbol;
         let multiplier = 1;
 
-        if (overtimeMarketTrade.collateral=="0x4200000000000000000000000000000000000006"){
+        if (overtimeMarketTrade.collateral== WETH_ADDRESS_BASE){
           moneySymbol = "weth";
           multiplier = ethPrice;
-        } else if (overtimeMarketTrade.collateral=="0x1527d463cC46686f815551314BD0E5Af253d58C0"){
-          moneySymbol = "OVER";
+        } else if (overtimeMarketTrade.collateral== THALES_ADDRESS_BASE){
+          moneySymbol = "THALES";
           multiplier = thalesPrice;
-        } else if (overtimeMarketTrade.collateral=="0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"){
+        } else if (overtimeMarketTrade.collateral== OVER_ADDRESS_BASE){
+          moneySymbol = "THALES";
+          multiplier = thalesPrice;
+        } else if (overtimeMarketTrade.collateral== BITCOIN_ADDRESS_BASE){
           moneySymbol = "cbBTC";
           multiplier = bitcoinPrice;
         } else {
@@ -1889,10 +1932,6 @@ async function getOvertimeV2BASETrades(){
                   value: mustWins
                 },
                 {
-                  name: ":coin: is SGP:",
-                  value: isSGP
-                },
-                {
                   name: ":coin: Buy in Amount:",
                   value: buyIn + " " + moneySymbol + buyInAmountUSD
                 },
@@ -1962,10 +2001,6 @@ async function getOvertimeV2BASETrades(){
                       ")",
                 },
                 {
-                  name: ":coin: is SGP:",
-                  value: isSGP
-                },
-                {
                   name: ":coin: Buy in Amount:",
                   value: buyIn + " " + moneySymbol + buyInAmountUSD
                 },
@@ -2020,7 +2055,14 @@ async function getOvertimeV2BASETrades(){
           if(!writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id)){
             writenOvertimeV2BASETrades.push(overtimeMarketTrade.id);
             let newVar1 = await redisClient.lpush(writenOvertimeV2BASETrades, overtimeMarketTrade.id);
-
+            if(isSGP){
+              embed.fields.push(
+                  {
+                    name: ":coin: SGP:",
+                    value: isSGP,
+                  }
+              );
+            }
             let newVar = await overtimeTradesChannel.send({ embeds: [embed] });
             console.log("#@#@#@Sending base message: "+JSON.stringify(embed));
           }
@@ -2063,9 +2105,6 @@ async function getOvertimeV2BASETrades(){
                       "](" + linkTransaction +
                       ticketOwner +
                       ")",
-                },{
-                  name: ":coin: is SGP:",
-                  value: isSGP
                 },
                 {
                   name: ":coin: Buy in Amount:",
@@ -2129,9 +2168,6 @@ async function getOvertimeV2BASETrades(){
                       "](" + linkTransaction +
                       ticketOwner +
                       ")",
-                },{
-                  name: ":coin: is SGP:",
-                  value: isSGP
                 },
                 {
                   name: ":coin: Buy in Amount:",
@@ -2188,6 +2224,14 @@ async function getOvertimeV2BASETrades(){
           if(!writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id)) {
             writenOvertimeV2BASETrades.push(overtimeMarketTrade.id);
             let lpush = await redisClient.lpush(overtimeV2BASETradesKey, overtimeMarketTrade.id);
+            if(isSGP){
+              embed.fields.push(
+                  {
+                    name: ":coin: SGP:",
+                    value: isSGP,
+                  }
+              );
+            }
             let newVar = await overtimeTradesChannel.send({ embeds: [embed] });
             console.log("#@#@#@Sending base message: "+JSON.stringify(embed));
           }
