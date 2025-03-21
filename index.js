@@ -2,16 +2,21 @@ require("dotenv").config();
 const {
   Client,
   Intents,
+  GatewayIntentBits,
   EmbedBuilder
 } = require("discord.js");
 const clientNewListings = new Client({
   intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
   ],
 });
 clientNewListings.login(process.env.BOT_TOKEN_LISTINGS);
 const redis = require("redis");
 var fs = require("fs");
 const axios = require("axios");
+const { v4: uuidv4 } = require('uuid');
 const SYNTH_USD_MAINNET = "0x57ab1ec28d129707052df4df418d58a2d46d5f51";
 const Web3 = require("web3");
 const web3Arbitrum = new Web3(new Web3.providers.HttpProvider("https://arbitrum-mainnet.infura.io/v3/71f890a2441d49088e4e145b2bc23bc7"));
@@ -100,7 +105,7 @@ const THALES_ADDRESS_OP = "0x217D47011b23BB961eB6D93cA9945B7501a5BB11";
 
 function  formatV2Amount(numberForFormating, collateralAddress) {
 
-  if(collateralAddress == WETH_ADDRESS_BASE || collateralAddress == THALES_ADDRESS_OP || collateralAddress == OVER_ADDRESS_OP) {
+  if(collateralAddress == WETH_ADDRESS_BASE || collateralAddress == THALES_ADDRESS_OP || collateralAddress.toLowerCase() == OVER_ADDRESS_OP.toLowerCase()) {
     return numberForFormating / 1e18;
   } else {
     return numberForFormating / 1e6
@@ -113,7 +118,7 @@ const BITCOIN_ADDRESS_BASE = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf";
 
 function  formatV2BASEAmount(numberForFormating, collateralAddress) {
 
-  if(collateralAddress == WETH_ADDRESS_BASE || collateralAddress == THALES_ADDRESS_BASE || collateralAddress == OVER_ADDRESS_BASE) {
+  if(collateralAddress == WETH_ADDRESS_BASE || collateralAddress == THALES_ADDRESS_BASE || collateralAddress.toLowerCase() == OVER_ADDRESS_BASE.toLowerCase()) {
     return numberForFormating / 1e18;
   } else if(collateralAddress == BITCOIN_ADDRESS_BASE){
     return numberForFormating / 1e8;
@@ -134,6 +139,29 @@ function  formatV2ARBAmount(numberForFormating, collateralAddress) {
   }else {
     return numberForFormating / 1e18
   }
+}
+
+const { EmbedBuilder } = require('discord.js');
+
+async function sendMessageIfNotDuplicate(channel, embed, uniqueValue) {
+  const messages = await channel.messages.fetch({ limit: 100 });
+
+  const duplicate = messages.find(msg => {
+    return msg.embeds.some(embed => {
+      if (!embed.fields || embed.fields.length === 0) return false;
+
+      return embed.fields.some(field =>
+          field.value.includes(uniqueValue)
+      );
+    });
+  });
+
+  if (duplicate) {
+    console.log(`Embed with value "${uniqueValue}" already exists.`);
+    return;
+  }
+
+  channel.send({ embeds: [embed] }).catch(console.error);
 }
 
 
@@ -374,18 +402,20 @@ clientNewListings.once("ready", () => {
 setInterval(function () {
   console.log("get L2 trades");
   getOvertimeV2Trades();
-}, 5 * 60 * 1000);
-
-
-setInterval(function () {
-  console.log("get L2 trades");
   getOvertimeV2BASETrades();
+  getOvertimeV2ARBTrades();
+}, 2 * 60 * 1000);
+
+
+/*setInterval(function () {
+  console.log("get L2 trades");
+
 }, 6 * 60 * 1000);
 
 setInterval(function () {
   console.log("get L2 trades");
-  getOvertimeV2ARBTrades();
-}, 7 * 60 * 1000);
+
+}, 7 * 60 * 1000);*/
 
 function  isTenisV2(sportId) {
   if(sportId.startsWith("153") || sportId.startsWith("156")) {
@@ -959,7 +989,7 @@ async function getOvertimeV2Trades(){
         } else if (overtimeMarketTrade.collateral== THALES_ADDRESS_OP){
           moneySymbol = "THALES";
           multiplier = thalesPrice;
-        } else if (overtimeMarketTrade.collateral== OVER_ADDRESS_OP){
+        } else if (overtimeMarketTrade.collateral.toLowerCase() == OVER_ADDRESS_OP.toLowerCase()){
           moneySymbol = "OVER";
           multiplier = thalesPrice;
         } else {
@@ -1153,6 +1183,7 @@ async function getOvertimeV2Trades(){
                 }
             );
           }
+
           await overtimeTradesChannel.send({embeds: [embed]});
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
           redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
@@ -1316,7 +1347,8 @@ async function getOvertimeV2Trades(){
                 }
             );
           }
-          await overtimeTradesChannel.send({embeds: [embed]});
+
+          await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id);
 
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
           redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
@@ -1408,7 +1440,7 @@ async function getOvertimeV2ARBTrades(){
         } else if (overtimeMarketTrade.collateral== THALES_ADDRESS_ARB){
           moneySymbol = "THALES";
           multiplier = thalesPrice;
-        } else if (overtimeMarketTrade.collateral== OVER_ADDRESS_ARB){
+        } else if (overtimeMarketTrade.collateral.toLowerCase()== OVER_ADDRESS_ARB.toLowerCase()){
           moneySymbol = "OVER";
           multiplier = thalesPrice;
         } else if (overtimeMarketTrade.collateral== BITCOIN_ADDRESS_ARB){
@@ -1622,7 +1654,8 @@ async function getOvertimeV2ARBTrades(){
                   }
               );
             }
-          let newVar = await overtimeTradesChannel.send({ embeds: [embed] });
+
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id)
           console.log("#@#@#@Sending arb message: "+JSON.stringify(embed));
           }
         } else {
@@ -1788,7 +1821,7 @@ async function getOvertimeV2ARBTrades(){
                   }
               );
             }
-           let newVar = await overtimeTradesChannel.send({ embeds: [embed] });
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id)
             console.log("#@#@#@Sending arb message: "+JSON.stringify(embed));
           }
         }
@@ -1848,7 +1881,7 @@ async function getOvertimeV2BASETrades(){
         } else if (overtimeMarketTrade.collateral== THALES_ADDRESS_BASE){
           moneySymbol = "THALES";
           multiplier = thalesPrice;
-        } else if (overtimeMarketTrade.collateral== OVER_ADDRESS_BASE){
+        } else if (overtimeMarketTrade.collateral.toLowerCase()== OVER_ADDRESS_BASE.toLowerCase()){
           moneySymbol = "THALES";
           multiplier = thalesPrice;
         } else if (overtimeMarketTrade.collateral== BITCOIN_ADDRESS_BASE){
@@ -2063,7 +2096,8 @@ async function getOvertimeV2BASETrades(){
                   }
               );
             }
-            let newVar = await overtimeTradesChannel.send({ embeds: [embed] });
+
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id)
             console.log("#@#@#@Sending base message: "+JSON.stringify(embed));
           }
         } else {
@@ -2232,7 +2266,7 @@ async function getOvertimeV2BASETrades(){
                   }
               );
             }
-            let newVar = await overtimeTradesChannel.send({ embeds: [embed] });
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id)
             console.log("#@#@#@Sending base message: "+JSON.stringify(embed));
           }
         }
