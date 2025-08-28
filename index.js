@@ -3,31 +3,43 @@ const {
   Client,
   Intents,
   GatewayIntentBits,
-  EmbedBuilder
+  EmbedBuilder,
+  ActivityType,
+  ChannelType
 } = require("discord.js");
 const clientNewListings = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.DirectMessages
   ],
 });
 clientNewListings.login(process.env.BOT_TOKEN_LISTINGS);
+const clientOVERCirculating = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages
+  ],
+})
+clientOVERCirculating.login(process.env.BOT_TOKEN_CIRCULATING_OVER);
 const redis = require("redis");
 var fs = require("fs");
 const axios = require("axios");
 const { v4: uuidv4 } = require('uuid');
 const SYNTH_USD_MAINNET = "0x57ab1ec28d129707052df4df418d58a2d46d5f51";
 const Web3 = require("web3");
-const web3Arbitrum = new Web3(new Web3.providers.HttpProvider("https://arbitrum-mainnet.infura.io/v3/71f890a2441d49088e4e145b2bc23bc7"));
 
-const web3ArbitrumV2 = new Web3(new Web3.providers.HttpProvider(process.env.INFURA_ARB_URL));
+
+const web3OP   = new Web3(new Web3.providers.HttpProvider(process.env.DRPC_OP_URL,   { timeout: 30000 }));
+const web3ARB  = new Web3(new Web3.providers.HttpProvider(process.env.DRPC_ARB_URL,  { timeout: 30000 }));
+const web3BASE = new Web3(new Web3.providers.HttpProvider(process.env.DRPC_BASE_URL, { timeout: 30000 }));
+
 
 let arbitrumRaw = fs.readFileSync('contracts/arbitrum.json');
 let arbitrumContract = JSON.parse(arbitrumRaw);
 const web3 = new Web3(new Web3.providers.HttpProvider(process.env.INFURA_URL));
-const web3L2 = new Web3(new Web3.providers.HttpProvider(process.env.INFURA_L2_URL));
-const web3Base = new Web3(new Web3.providers.HttpProvider("https://mainnet.base.org"));
 const CoinGecko = require('coingecko-api');
 const CoinGeckoClient = new CoinGecko();
 const oddslib = require('oddslib');
@@ -35,7 +47,7 @@ const oddslib = require('oddslib');
 
 let contractV2OTRaw = fs.readFileSync('contracts/v2overtime.json');
 let v2ContractRaw = JSON.parse(contractV2OTRaw);
-let v2Contract = new web3L2.eth.Contract(v2ContractRaw,"0x2367FB44C4C2c4E5aAC62d78A55876E01F251605");
+let v2Contract = new web3OP.eth.Contract(v2ContractRaw,"0x2367FB44C4C2c4E5aAC62d78A55876E01F251605");
 let FREE_BET_ARB = "0xd1F2b87a9521315337855A132e5721cfe272BBd9";
 let STAKING_ARB = "0x109e966A4d856B82f158BF528395de6fF36214A8";
 let overtimeV2TradesKey = "overtimeV2TradesKey";
@@ -50,33 +62,79 @@ let STAKING_BASE = "0x84aB38e42D8Da33b480762cCa543eEcA6135E040";
 let contractStakingTRaw = fs.readFileSync('contracts/staking.json');
 let v2StakingRaw = JSON.parse(contractStakingTRaw);
 
-let v2StakingARB = new web3Arbitrum.eth.Contract(v2StakingRaw,STAKING_ARB);
-let v2StakingOP = new web3L2.eth.Contract(v2StakingRaw,STAKING_OP);
-let v2StakingBASE = new web3Base.eth.Contract(v2StakingRaw,STAKING_BASE);
+let v2StakingARB = new web3ARB.eth.Contract(v2StakingRaw,STAKING_ARB);
+let v2StakingOP = new web3OP.eth.Contract(v2StakingRaw,STAKING_OP);
+let v2StakingBASE = new web3BASE.eth.Contract(v2StakingRaw,STAKING_BASE);
 
-let v2FreeBetARB = new web3Arbitrum.eth.Contract(v2StakingRaw,FREE_BET_ARB);
-let v2FreeBetgOP = new web3L2.eth.Contract(v2StakingRaw,FREE_BET_OP);
-let v2FreeBetgBASE = new web3Base.eth.Contract(v2StakingRaw,FREE_BET_BASE);
+let v2FreeBetARB = new web3ARB.eth.Contract(v2StakingRaw,FREE_BET_ARB);
+let v2FreeBetgOP = new web3OP.eth.Contract(v2StakingRaw,FREE_BET_OP);
+let v2FreeBetgBASE = new web3BASE.eth.Contract(v2StakingRaw,FREE_BET_BASE);
 
 
 let contractV2TicketRaw = fs.readFileSync('contracts/v2overtimeTicket.json');
 let v2ContractTicketRaw = JSON.parse(contractV2TicketRaw);
-let v2TicketContract = new web3L2.eth.Contract(v2ContractTicketRaw,"0x71CE219942FFD9C1d8B67d6C35C39Ae04C4F647B");
+let v2TicketContract = new web3OP.eth.Contract(v2ContractTicketRaw,"0x71CE219942FFD9C1d8B67d6C35C39Ae04C4F647B");
 
-let v2ARBContract = new web3ArbitrumV2.eth.Contract(v2ContractRaw,"0xB155685132eEd3cD848d220e25a9607DD8871D38");
+let v2ARBContract = new web3ARB.eth.Contract(v2ContractRaw,"0xB155685132eEd3cD848d220e25a9607DD8871D38");
 
-let v2ARBTicketContract = new web3ArbitrumV2.eth.Contract(v2ContractTicketRaw,"0x04386f9b2b4f713984Fe0425E46a376201641649");
+let v2ARBTicketContract = new web3ARB.eth.Contract(v2ContractTicketRaw,"0x04386f9b2b4f713984Fe0425E46a376201641649");
 
-let v2BASEContract = new web3Base.eth.Contract(v2ContractRaw,"0xA2dCFEe657Bc0a71AC31d146366246202eae18a4");
+let v2BASEContract = new web3BASE.eth.Contract(v2ContractRaw,"0xA2dCFEe657Bc0a71AC31d146366246202eae18a4");
 
-let v2BASETicketContract = new web3Base.eth.Contract(v2ContractTicketRaw,"0x99D318b6402cE95B6B46F40f752eA96430A2Ead0");
 
+let contractESORaw = fs.readFileSync('contracts/eso.json');
+let esoContrat = JSON.parse(contractESORaw);
+let esoOPContract = new web3OP.eth.Contract(esoContrat,"0x0000001c5b32f37f5bea87bdd5374eb2ac54ea8e");
+let esoARBContract = new web3ARB.eth.Contract(esoContrat,"0x0000001c5b32f37f5bea87bdd5374eb2ac54ea8e");
+let esoBASEContract = new web3BASE.eth.Contract(esoContrat,"0x0000001c5b32f37f5bea87bdd5374eb2ac54ea8e");
+
+let v2BASETicketContract = new web3BASE.eth.Contract(v2ContractTicketRaw,"0x99D318b6402cE95B6B46F40f752eA96430A2Ead0");
+
+// Global Channel IDs
+const CHANNEL_OPT_SMALL = "1249389171311644816";
+const CHANNEL_OPT_LIVE_SMALL = "1250500936120406177";
+const CHANNEL_OPT_LARGE = "1249389262089228309";
+const CHANNEL_OPT_LIVE_LARGE = "1250500964608245853";
+const CHANNEL_OPT_BIG_PAYOUT = "1272945193016098849";
+
+const CHANNEL_ARB_SMALL = "1272539024464281622";
+const CHANNEL_ARB_LIVE_SMALL = "1272539526274744390";
+const CHANNEL_ARB_LARGE = "1272539294258561045";
+const CHANNEL_ARB_LIVE_LARGE = "1272539696672804907";
+const CHANNEL_ARB_BIG_PAYOUT = "1272950140637806705";
+
+const CHANNEL_BASE_SMALL = "1334190781115928677";
+const CHANNEL_BASE_LIVE_SMALL = "1334191049454780478";
+const CHANNEL_BASE_LARGE = "1334190954969825300";
+const CHANNEL_BASE_LIVE_LARGE = "1334191112310489210";
+const CHANNEL_BASE_BIG_PAYOUT = "1334191185694294076";
+
+const userDukaIdForBigTrades = '340872297630138370';
+const userLukaIdForBigTrades = '696035982394523799';
+
+const ALL_CHANNEL_IDS = [
+  CHANNEL_OPT_SMALL,
+  CHANNEL_OPT_LIVE_SMALL,
+  CHANNEL_OPT_LARGE,
+  CHANNEL_OPT_LIVE_LARGE,
+  CHANNEL_OPT_BIG_PAYOUT,
+  CHANNEL_ARB_SMALL,
+  CHANNEL_ARB_LIVE_SMALL,
+  CHANNEL_ARB_LARGE,
+  CHANNEL_ARB_LIVE_LARGE,
+  CHANNEL_ARB_BIG_PAYOUT,
+  CHANNEL_BASE_SMALL,
+  CHANNEL_BASE_LIVE_SMALL,
+  CHANNEL_BASE_LARGE,
+  CHANNEL_BASE_LIVE_LARGE,
+  CHANNEL_BASE_BIG_PAYOUT
+];
 
 let writenOvertimeV2Trades = [];
 let writenOvertimeV2ARBTrades = [];
 
 let writenOvertimeV2BASETrades = [];
-
+let redisClient;
 if (process.env.REDIS_URL) {
   redisClient = redis.createClient(process.env.REDIS_URL);
   redisClient.on("error", function (error) {
@@ -102,6 +160,26 @@ if (process.env.REDIS_URL) {
 const WETH_ADDRESS_BASE = "0x4200000000000000000000000000000000000006";
 
 const THALES_ADDRESS_OP = "0x217D47011b23BB961eB6D93cA9945B7501a5BB11";
+
+let typeInfoMap;
+
+async function fetchTypeInfoMap() {
+  try {
+    const response = await axios.get('https://api.overtime.io/overtime-v2/market-types');
+    typeInfoMap = response.data;
+
+  } catch (error) {
+    console.error('Error fetching market types:', error.message);
+  }
+}
+
+// Call it once immediately on startup
+fetchTypeInfoMap();
+
+// Then call it every 5 minutes
+setInterval(fetchTypeInfoMap, 5 * 60 * 1000);
+
+
 
 function  formatV2Amount(numberForFormating, collateralAddress) {
 
@@ -141,9 +219,10 @@ function  formatV2ARBAmount(numberForFormating, collateralAddress) {
   }
 }
 
-const { EmbedBuilder } = require('discord.js');
 
-async function sendMessageIfNotDuplicate(channel, embed, uniqueValue) {
+
+
+async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additionalText) {
   const messages = await channel.messages.fetch({ limit: 100 });
 
   const duplicate = messages.find(msg => {
@@ -162,7 +241,31 @@ async function sendMessageIfNotDuplicate(channel, embed, uniqueValue) {
   }
 
   channel.send({ embeds: [embed] }).catch(console.error);
+  if(additionalText){
+    embed.fields.push(
+        {
+          name: ":coin: TRADE TYPE (DM):",
+          value: additionalText,
+        }
+    );
+    await sendDirectMessageToUser(embed);
+  }
 }
+
+async function sendDirectMessageToUser(embed) {
+  try {
+    const userDuka = await clientNewListings.users.fetch(userDukaIdForBigTrades);
+    const userLuka = await clientNewListings.users.fetch(userLukaIdForBigTrades);
+
+    await userLuka.send({ embeds: [embed] });
+    await userDuka.send({ embeds: [embed] }); // ✅ Only sending embed here
+    console.log(`✅ Embed DM sent to ${userDuka.tag}`);
+  } catch (error) {
+    console.error(`❌ Could not send DM to user ID:`, error);
+  }
+}
+
+
 
 
 
@@ -230,13 +333,13 @@ let METHOD_OF_VICTORY = new Array;
 METHOD_OF_VICTORY.push(10158);
 
 let TOTAL_HOME_FIRST = new Array;
-TOTAL_HOME_FIRST.push(10111)
+TOTAL_HOME_FIRST.push(10111,10211,10311,10411,10511,10611,10711,10811)
 
     let TOTAL_HOME_SECOND = new Array;
-TOTAL_HOME_FIRST.push(10211, 10017)
+TOTAL_HOME_SECOND.push(10211, 10017)
 
     let TOTAL_AWAY_SECOND = new Array;
-TOTAL_AWAY_SECOND.push(10212,10018)
+TOTAL_AWAY_SECOND.push(10212,10018,10112,10312,10412,10512,10612,10712,10812)
 
     let TOTAL_AWAY_FIRST = new Array;
 TOTAL_AWAY_FIRST.push(10112)
@@ -397,6 +500,7 @@ CORRECT_SCORE_MAP.set("25","score not mapped");
 clientNewListings.once("ready", () => {
   console.log("initial new operations");
   updateTokenPrice();
+  updateCirculatingAndMarketCap();
 });
 
 setInterval(function () {
@@ -405,6 +509,17 @@ setInterval(function () {
   getOvertimeV2BASETrades();
   getOvertimeV2ARBTrades();
 }, 2 * 60 * 1000);
+
+setInterval(function () {
+  console.log("cleaning duplicates");
+  cleanUpDuplicateMessages();
+}, 1 * 60 * 1000);
+
+setInterval(function () {
+  console.log("update prices");
+  updateTokenPrice();
+  updateCirculatingAndMarketCap();
+}, 10 * 60 * 1000);
 
 
 /*setInterval(function () {
@@ -429,7 +544,7 @@ async function getV2MessageContent(overtimeMarketTrade,typeMap) {
   let homeTeam;
   let awayTeam;
   let position = overtimeMarketTrade.marketsData[0].position;
-  let specificGame = await axios.get('https://api.thalesmarket.io/overtime-v2/games-info/' + overtimeMarketTrade.marketsData[0].gameId);
+  let specificGame = await axios.get('https://api.overtime.io/overtime-v2/games-info/' + overtimeMarketTrade.marketsData[0].gameId);
   specificGame = specificGame.data;
   if (specificGame.teams[0].isHome) {
     homeTeam = specificGame.teams[0].name;
@@ -441,7 +556,7 @@ async function getV2MessageContent(overtimeMarketTrade,typeMap) {
   let marketType = typeMap.get(overtimeMarketTrade.marketsData[0].typeId).name;
   let marketMessage;
   if (overtimeMarketTrade.marketsData[0].playerId && overtimeMarketTrade.marketsData[0].playerId > 0) {
-    let specificPlayer = await axios.get('https://api.thalesmarket.io/overtime-v2/players-info/' + overtimeMarketTrade.marketsData[0].playerId);
+    let specificPlayer = await axios.get('https://api.overtime.io/overtime-v2/players-info/' + overtimeMarketTrade.marketsData[0].playerId);
     specificPlayer = specificPlayer.data.playerName;
     marketMessage = specificPlayer;
   } else {
@@ -476,7 +591,7 @@ async function getV2MessageContent(overtimeMarketTrade,typeMap) {
       }
     }
   }
-  else if(ENDING_METHOD.includes(position)){
+  else if(ENDING_METHOD.includes(marketId)){
     switch (position) {
       case 0:
         betMessage = "Draw";
@@ -679,7 +794,7 @@ async function getV2MessageContent(overtimeMarketTrade,typeMap) {
 
 async function getV2ParlayMessage(overtimeMarketTrade, parlayMessage,typeMap) {
   for (const marketsData of overtimeMarketTrade.marketsData) {
-    let specificGame = await axios.get('https://api.thalesmarket.io/overtime-v2/games-info/' + marketsData.gameId);
+    let specificGame = await axios.get('https://api.overtime.io/overtime-v2/games-info/' + marketsData.gameId);
     specificGame = specificGame.data;
     let position = marketsData.position;
     let marketType = typeMap.get(marketsData.typeId).name;
@@ -687,7 +802,7 @@ async function getV2ParlayMessage(overtimeMarketTrade, parlayMessage,typeMap) {
     let awayTeam;
     let marketId = typeMap.get(marketsData.typeId).id;
     if (marketsData.playerId && marketsData.playerId > 0) {
-      let specificPlayer = await axios.get('https://api.thalesmarket.io/overtime-v2/players-info/' + marketsData.playerId);
+      let specificPlayer = await axios.get('https://api.overtime.io/overtime-v2/players-info/' + marketsData.playerId);
       specificPlayer = specificPlayer.data.playerName;
       let betMessage = "";
       if (TOTAL.includes(marketId)) {
@@ -934,20 +1049,10 @@ const OVER_ADDRESS_OP = "0xedf38688b27036816a50185caa430d5479e1c63e";
 
 async function getOvertimeV2Trades(){
 
-  let activeTickets = await v2Contract.methods.getActiveTickets(0, 10000).call();
-  let overtimeTrades = [];
+  if (!typeInfoMap) return;
+  const activeTickets = await getAllActiveTicketsPaged(v2Contract);
+  let overtimeTrades = await robustGetTicketsData(v2TicketContract, activeTickets,'OP:getTicketsData');
 
-  for (let i = 0; i < activeTickets.length; i += 900) {
-    let chunk = activeTickets.slice(i, i + 900);
-    let chunkData = await v2TicketContract.methods.getTicketsData(chunk).call();
-    overtimeTrades = overtimeTrades.concat(chunkData);
-  }
-
-  let typeInfoMap = await axios.get('https://api.thalesmarket.io/overtime-v2/market-types');//api.thalesmarket.io/overtime-v2/market-types;
-  let sportsInfoMap = await axios.get('https://api.thalesmarket.io/overtime-v2/sports');
-  typeInfoMap = typeInfoMap.data;
-  sportsInfoMap = sportsInfoMap.data;
-  const sportMap = new Map(Object.entries(JSON.parse(JSON.stringify(sportsInfoMap))));
   const typeMap = new Map(Object.entries(JSON.parse(JSON.stringify(typeInfoMap))));
   var startdate = new Date();
   var durationInMinutes = 30;
@@ -964,6 +1069,14 @@ async function getOvertimeV2Trades(){
   for (const overtimeMarketTrade of overtimeTradesUQ) {
     if (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2Trades.includes(overtimeMarketTrade.id)) {
       try {
+
+        const address = Web3.utils.toChecksumAddress(overtimeMarketTrade.ticketOwner);
+        let isSmart =  await isSmartContract(web3OP, address);
+        let smartTicketOwner;
+        if (isSmart){
+          smartTicketOwner = await getOwnerOfSmartAccount(esoOPContract,overtimeMarketTrade.ticketOwner);
+        }
+
         let ticketOwner;
         if(overtimeMarketTrade.ticketOwner == STAKING_OP ){
           ticketOwner =  await v2StakingOP.methods.ticketToUser(overtimeMarketTrade.id).call();
@@ -987,7 +1100,7 @@ async function getOvertimeV2Trades(){
           moneySymbol = "weth";
           multiplier = ethPrice;
         } else if (overtimeMarketTrade.collateral== THALES_ADDRESS_OP){
-          moneySymbol = "THALES";
+          moneySymbol = "OVER";
           multiplier = thalesPrice;
         } else if (overtimeMarketTrade.collateral.toLowerCase() == OVER_ADDRESS_OP.toLowerCase()){
           moneySymbol = "OVER";
@@ -1155,24 +1268,27 @@ async function getOvertimeV2Trades(){
             };
           }
           let overtimeTradesChannel;
+          let additionalText;
           if(Number(multiplier*amountInCurrency)<500){
             if(payoutInCurrency>=1000){
                overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1272945193016098849");
+                  .fetch(CHANNEL_OPT_BIG_PAYOUT);
             } else if(overtimeMarketTrade.isLive){
                overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1250500936120406177");
+                  .fetch(CHANNEL_OPT_LIVE_SMALL);
             } else {
              overtimeTradesChannel = await clientNewListings.channels
-                .fetch("1249389171311644816");
+                .fetch(CHANNEL_OPT_SMALL);
             }
           } else{
             if(overtimeMarketTrade.isLive){
              overtimeTradesChannel = await clientNewListings.channels
-                .fetch("1250500964608245853");
+                .fetch(CHANNEL_OPT_LIVE_LARGE);
+              additionalText = "OP: LIVE TRADE";
           } else {
              overtimeTradesChannel = await clientNewListings.channels
-                .fetch("1249389262089228309");
+                .fetch(CHANNEL_OPT_LARGE);
+              additionalText = "OP: Normal TRADE";
             }
           }
           if(isSGP){
@@ -1184,7 +1300,16 @@ async function getOvertimeV2Trades(){
             );
           }
 
-          await overtimeTradesChannel.send({embeds: [embed]});
+          if(smartTicketOwner){
+            embed.fields.push(
+                {
+                  name: ":coin: Smart ticket owner:",
+                  value: smartTicketOwner,
+                }
+            );
+          }
+
+          await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText);
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
           redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
 
@@ -1320,24 +1445,26 @@ async function getOvertimeV2Trades(){
             };
           }
           let overtimeTradesChannel;
-
+          let additionalText;
           if(Number(multiplier*amountInCurrency)<500){
             if(payoutInCurrency>=1000){
                overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1272945193016098849");
+                  .fetch(CHANNEL_OPT_BIG_PAYOUT);
             } else if(overtimeMarketTrade.isLive){
                overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1250500936120406177");
+                  .fetch(CHANNEL_OPT_LIVE_SMALL);
             } else {
              overtimeTradesChannel = await clientNewListings.channels
-                .fetch("1249389171311644816");
+                .fetch(CHANNEL_OPT_SMALL);
             }} else{
             if(overtimeMarketTrade.isLive){
                overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1250500964608245853");
+                  .fetch(CHANNEL_OPT_LIVE_LARGE);
+              additionalText = "OP: LIVE TRADE";
             } else {
              overtimeTradesChannel = await clientNewListings.channels
-                .fetch("1249389262089228309");
+                .fetch(CHANNEL_OPT_LARGE);
+              additionalText = "OP: NORMAL TRADE";
           }}
           if(isSGP){
             embed.fields.push(
@@ -1348,7 +1475,16 @@ async function getOvertimeV2Trades(){
             );
           }
 
-          await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id);
+          if(smartTicketOwner){
+            embed.fields.push(
+                {
+                  name: ":coin: Smart ticket owner:",
+                  value: smartTicketOwner,
+                }
+            );
+          }
+
+          await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText);
 
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
           redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
@@ -1367,15 +1503,55 @@ async function getOvertimeV2Trades(){
 
 
 
-let thalesPrice = 0.22;
+let thalesPrice = 0.11;
 let ethPrice = 3000;
 let bitcoinPrice = 89000;
+let circulatingSupplyOver = 69420000;
+let marketCapOver = 9326707;
+
+function getNumberLabelDecimalsMil(labelValue) {
+
+  // Nine Zeroes for Billions
+  return Math.abs(Number(labelValue)) >= 1.0e+9
+
+      ? Math.round(Math.abs(Number(labelValue)) / 1.0e+9) + "B"
+      // Six Zeroes for Millions
+      : Math.abs(Number(labelValue)) >= 1.0e+6
+
+          ? Math.round((Math.abs(Number(labelValue)) / 1.0e+6) * 100000) / 100000 + "M"
+          // Three Zeroes for Thousands
+          : Math.abs(Number(labelValue)) >= 1.0e+3
+
+              ? Math.round(Math.abs(Number(labelValue)) / 1.0e+3) + "K"
+
+              : Math.abs(Number(labelValue));
+
+}
+
+async function updateCirculatingAndMarketCap() {
+  console.log("Updating circulating: " + clientOVERCirculating + " and Thales price: " + thalesPrice);
+
+  if(circulatingSupplyOver && marketCapOver && clientOVERCirculating && clientOVERCirculating.user) {
+  for (const [guildId, guild] of clientOVERCirculating.guilds.cache) {
+    try {
+      const member = await guild.members.fetch(clientOVERCirculating.user.id);
+      await member.setNickname(getNumberLabelDecimalsMil(marketCapOver) + " $ Market Cap");
+    } catch (e) {
+      console.error("Nickname update error in guild:", guildId, e.message);
+    }
+  }
+
+  clientOVERCirculating.user.setActivity(getNumberLabelDecimalsMil(circulatingSupplyOver) + " Circulating", { type: ActivityType.Watching }); // 3 = WATCHING
+}}
+
 
 async function updateTokenPrice() {
 
-  let dataThales = await CoinGeckoClient.coins.fetch("thales");
+  let dataThales = await CoinGeckoClient.coins.fetch("overtime");
   if(dataThales.data && dataThales.data.market_data) {
     thalesPrice =   dataThales.data.market_data.current_price.usd;
+    circulatingSupplyOver = dataThales.data.market_data.circulating_supply;
+    marketCapOver = dataThales.data.market_data.market_cap.usd;
   }
 
   let dataETH = await CoinGeckoClient.coins.fetch("ethereum");
@@ -1395,15 +1571,72 @@ const THALES_ADDRESS_ARB = "0xE85B662Fe97e8562f4099d8A1d5A92D4B453bF30";
 
 const OVER_ADDRESS_ARB = "0x5829d6fe7528bc8e92c4e81cc8f20a528820b51a";
 
+const TICKET_ADDRESS_LABEL = ":link: Ticket address:";
+
+const PAGE_SIZE = 300;
+const DATA_CHUNK = 200;
+
+async function callWithLabel(label, fn) {
+  try {
+    return await fn();
+  } catch (e) {
+    console.error(`❌ Revert on: ${label}`, e && e.message ? e.message : e);
+    throw e;
+  }
+}
+
+async function getAllActiveTicketsPaged(v2CoreContract) {
+  const all = [];
+  for (let start = 0; ; start += PAGE_SIZE) {
+    const page = await callWithLabel(
+        `getActiveTickets(start=${start}, size=${PAGE_SIZE})`,
+        () => v2CoreContract.methods.getActiveTickets(start, PAGE_SIZE).call()
+    );
+    if (!page || page.length === 0) break;
+    all.push(...page);
+    if (page.length < PAGE_SIZE) break; // last page
+  }
+  return all;
+}
+
+
+async function robustGetTicketsData(ticketContract, ids, labelBase = 'getTicketsData') {
+  const out = [];
+
+  async function fetchChunk(arr, depth = 0) {
+    if (arr.length === 0) return;
+
+    try {
+      const data = await callWithLabel(
+          `${labelBase}(len=${arr.length}, depth=${depth})`,
+          () => ticketContract.methods.getTicketsData(arr).call()
+      );
+      out.push(...data);
+    } catch (err) {
+      // If a single id still reverts, skip it (it went stale)
+      if (arr.length === 1) {
+        console.warn(`⚠️ Skipping stale/invalid ticketId: ${arr[0]}`);
+        return;
+      }
+      // Split in half and try each half
+      const mid = Math.floor(arr.length / 2);
+      const left = arr.slice(0, mid);
+      const right = arr.slice(mid);
+      await fetchChunk(left, depth + 1);
+      await fetchChunk(right, depth + 1);
+    }
+  }
+
+  await fetchChunk(ids, 0);
+  return out;
+}
+
+
 async function getOvertimeV2ARBTrades(){
 
-  let activeTickets = await v2ARBContract.methods.getActiveTickets(0,10000).call();
-  let overtimeTrades = await v2ARBTicketContract.methods.getTicketsData(activeTickets).call();
-  let typeInfoMap = await axios.get('https://api.thalesmarket.io/overtime-v2/market-types');//api.thalesmarket.io/overtime-v2/market-types;
-  let sportsInfoMap = await axios.get('https://api.thalesmarket.io/overtime-v2/sports');
-  typeInfoMap = typeInfoMap.data;
-  sportsInfoMap = sportsInfoMap.data;
-  const sportMap = new Map(Object.entries(JSON.parse(JSON.stringify(sportsInfoMap))));
+  if (!typeInfoMap) return;
+  const activeTickets = await getAllActiveTicketsPaged(v2ARBContract);
+  let overtimeTrades = await robustGetTicketsData(v2ARBTicketContract, activeTickets,'ARB:getTicketsData');
   const typeMap = new Map(Object.entries(JSON.parse(JSON.stringify(typeInfoMap))));
   var startdate = new Date();
   var durationInMinutes = 30;
@@ -1422,6 +1655,12 @@ async function getOvertimeV2ARBTrades(){
     if (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2ARBTrades.includes(overtimeMarketTrade.id)) {
       try {
 
+        const address = Web3.utils.toChecksumAddress(overtimeMarketTrade.ticketOwner);
+        let isSmart =  await isSmartContract(web3ARB, address);
+        let smartTicketOwner;
+        if (isSmart){
+          smartTicketOwner = await getOwnerOfSmartAccount(esoARBContract,overtimeMarketTrade.ticketOwner);
+        }
 
         let isSystem = overtimeMarketTrade.isSystem;
         let mustWins;
@@ -1438,7 +1677,7 @@ async function getOvertimeV2ARBTrades(){
           moneySymbol = "weth";
           multiplier = ethPrice;
         } else if (overtimeMarketTrade.collateral== THALES_ADDRESS_ARB){
-          moneySymbol = "THALES";
+          moneySymbol = "OVER";
           multiplier = thalesPrice;
         } else if (overtimeMarketTrade.collateral.toLowerCase()== OVER_ADDRESS_ARB.toLowerCase()){
           moneySymbol = "OVER";
@@ -1503,7 +1742,7 @@ async function getOvertimeV2ARBTrades(){
                 value: betMessage,
               },
               {
-                name: ":link: Ticket  address:",
+                name: TICKET_ADDRESS_LABEL,
                 value:
                     "[" +
                     overtimeMarketTrade.id +
@@ -1575,7 +1814,7 @@ async function getOvertimeV2ARBTrades(){
                   value: betMessage,
                 },
                 {
-                  name: ":link: Ticket  address:",
+                  name: TICKET_ADDRESS_LABEL,
                   value:
                       "[" +
                       overtimeMarketTrade.id +
@@ -1621,26 +1860,28 @@ async function getOvertimeV2ARBTrades(){
           }
 
          let overtimeTradesChannel;
+          let additionalText;
           if(Number(multiplier*amountInCurrency)<500){
             if(payoutInCurrency>=1000){
                overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1272950140637806705");
+                  .fetch(CHANNEL_ARB_BIG_PAYOUT);
             } else if(overtimeMarketTrade.isLive){
                overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1272539526274744390");
+                  .fetch(CHANNEL_ARB_LIVE_SMALL);
 
             } else {
                overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1272539024464281622");
+                  .fetch(CHANNEL_ARB_SMALL);
              }
           } else{
             if(overtimeMarketTrade.isLive){
                overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1272539696672804907");
-
+                  .fetch(CHANNEL_ARB_LIVE_LARGE);
+              additionalText = "ARB: LIVE TRADE";
             } else {
                overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1272539294258561045");
+                  .fetch(CHANNEL_ARB_LARGE);
+              additionalText = "ARB: NORMAL TRADE";
                }
           }
           if(!writenOvertimeV2ARBTrades.includes(overtimeMarketTrade.id)){
@@ -1655,7 +1896,16 @@ async function getOvertimeV2ARBTrades(){
               );
             }
 
-            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id)
+            if(smartTicketOwner){
+              embed.fields.push(
+                  {
+                    name: ":coin: Smart ticket owner:",
+                    value: smartTicketOwner,
+                  }
+              );
+            }
+
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText)
           console.log("#@#@#@Sending arb message: "+JSON.stringify(embed));
           }
         } else {
@@ -1682,7 +1932,7 @@ async function getOvertimeV2ARBTrades(){
                     ")",
               },
               {
-                name: ":link: Ticket address:",
+                name: TICKET_ADDRESS_LABEL,
                 value:
                     "[" +
                     overtimeMarketTrade.id +
@@ -1745,7 +1995,7 @@ async function getOvertimeV2ARBTrades(){
                       ")",
                 },
                 {
-                  name: ":link: Ticket address:",
+                  name: TICKET_ADDRESS_LABEL,
                   value:
                       "[" +
                       overtimeMarketTrade.id +
@@ -1789,24 +2039,27 @@ async function getOvertimeV2ARBTrades(){
             };
           }
           let overtimeTradesChannel;
+          let additionalText;
           if(Number(multiplier*amountInCurrency)<500){
             if(payoutInCurrency>=1000){
                overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1272950140637806705");
+                  .fetch(CHANNEL_ARB_BIG_PAYOUT);
             } else if(overtimeMarketTrade.isLive){
                overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1272539526274744390");
+                  .fetch(CHANNEL_ARB_LIVE_SMALL);
             } else {
                overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1272539024464281622");
+                  .fetch(CHANNEL_ARB_SMALL);
             }
           } else{
             if(overtimeMarketTrade.isLive){
                overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1272539696672804907");
+                  .fetch(CHANNEL_ARB_LIVE_LARGE);
+              additionalText = "ARB: LIVE TRADE";
             } else {
                overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1272539294258561045");
+                  .fetch(CHANNEL_ARB_LARGE);
+               additionalText = "ARB: NORMAL TRADE";
                }}
 
 
@@ -1821,7 +2074,17 @@ async function getOvertimeV2ARBTrades(){
                   }
               );
             }
-            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id)
+
+            if(smartTicketOwner){
+              embed.fields.push(
+                  {
+                    name: ":coin: Smart ticket owner:",
+                    value: smartTicketOwner,
+                  }
+              );
+            }
+
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText)
             console.log("#@#@#@Sending arb message: "+JSON.stringify(embed));
           }
         }
@@ -1835,17 +2098,35 @@ async function getOvertimeV2ARBTrades(){
 }
 
 
+async function isSmartContract(web3, address) {
+  try {
+
+    const code = await web3.eth.getCode(address);
+    return code && code !== '0x';
+  } catch (error) {
+    console.error('Error checking if address is a smart contract:', error);
+    return false;
+  }
+}
+
+async function getOwnerOfSmartAccount(contract, ticketOwner) {
+  try {
+    const owner = await contract.methods.getOwner(ticketOwner).call();
+    return owner;
+  } catch (err) {
+    console.error("Error calling getOwner():", err);
+    return null;
+  }
+}
+
+
 const OVER_ADDRESS_BASE = "0x7750c092e284e2c7366f50c8306f43c7eb2e82a2";
 
 async function getOvertimeV2BASETrades(){
 
-  let activeTickets = await v2BASEContract.methods.getActiveTickets(0,10000).call();
-  let overtimeTrades = await v2BASETicketContract.methods.getTicketsData(activeTickets).call();
-  let typeInfoMap = await axios.get('https://api.thalesmarket.io/overtime-v2/market-types');//api.thalesmarket.io/overtime-v2/market-types;
-  let sportsInfoMap = await axios.get('https://api.thalesmarket.io/overtime-v2/sports');
-  typeInfoMap = typeInfoMap.data;
-  sportsInfoMap = sportsInfoMap.data;
-  const sportMap = new Map(Object.entries(JSON.parse(JSON.stringify(sportsInfoMap))));
+  if (!typeInfoMap) return;
+  const activeTickets = await getAllActiveTicketsPaged(v2BASEContract);
+  let overtimeTrades = await robustGetTicketsData(v2BASETicketContract, activeTickets,'BASE:getTicketsData');
   const typeMap = new Map(Object.entries(JSON.parse(JSON.stringify(typeInfoMap))));
   var startdate = new Date();
   var durationInMinutes = 30;
@@ -1864,7 +2145,12 @@ async function getOvertimeV2BASETrades(){
     if (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id)) {
       try {
 
-
+        const address = Web3.utils.toChecksumAddress(overtimeMarketTrade.ticketOwner);
+        let isSmart =  await isSmartContract(web3BASE, address);
+        let smartTicketOwner;
+        if (isSmart){
+          smartTicketOwner = await getOwnerOfSmartAccount(esoBASEContract,overtimeMarketTrade.ticketOwner);
+        }
         let isSystem = overtimeMarketTrade.isSystem;
         let mustWins;
         if(isSystem){
@@ -1879,10 +2165,10 @@ async function getOvertimeV2BASETrades(){
           moneySymbol = "weth";
           multiplier = ethPrice;
         } else if (overtimeMarketTrade.collateral== THALES_ADDRESS_BASE){
-          moneySymbol = "THALES";
+          moneySymbol = "OVER";
           multiplier = thalesPrice;
         } else if (overtimeMarketTrade.collateral.toLowerCase()== OVER_ADDRESS_BASE.toLowerCase()){
-          moneySymbol = "THALES";
+          moneySymbol = "OVER";
           multiplier = thalesPrice;
         } else if (overtimeMarketTrade.collateral== BITCOIN_ADDRESS_BASE){
           moneySymbol = "cbBTC";
@@ -1944,7 +2230,7 @@ async function getOvertimeV2BASETrades(){
                   value: betMessage,
                 },
                 {
-                  name: ":link: Ticket  address:",
+                  name: TICKET_ADDRESS_LABEL,
                   value:
                       "[" +
                       overtimeMarketTrade.id +
@@ -1972,7 +2258,6 @@ async function getOvertimeV2BASETrades(){
                   name: ":coin: Payout:",
                   value: roundTo2Decimals(buyIn * odds) + " "+ moneySymbol + payoutInUSD ,
                 },
-                ,
                 {
                   name: ":coin: Fees:",
                   value: formatV2BASEAmount(overtimeMarketTrade.fees , overtimeMarketTrade.collateral).toFixed(2) + " " + moneySymbol ,
@@ -2017,7 +2302,7 @@ async function getOvertimeV2BASETrades(){
                   value: betMessage,
                 },
                 {
-                  name: ":link: Ticket  address:",
+                  name: TICKET_ADDRESS_LABEL,
                   value:
                       "[" +
                       overtimeMarketTrade.id +
@@ -2063,31 +2348,34 @@ async function getOvertimeV2BASETrades(){
           }
 
           let overtimeTradesChannel;
+          let additionalText;
           if(Number(multiplier*amountInCurrency)<500){
             if(payoutInCurrency>=1000){
               overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1334191185694294076");
+                  .fetch(CHANNEL_BASE_BIG_PAYOUT);
             } else if(overtimeMarketTrade.isLive){
               overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1334191049454780478");
+                  .fetch(CHANNEL_BASE_LIVE_SMALL);
 
             } else {
               overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1334190781115928677");
+                  .fetch(CHANNEL_BASE_SMALL);
             }
           } else{
             if(overtimeMarketTrade.isLive){
               overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1334191112310489210");
+                  .fetch(CHANNEL_BASE_LIVE_LARGE);
+              additionalText = "BASE: LIVE TRADE";
 
             } else {
               overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1334190954969825300");
+                  .fetch(CHANNEL_BASE_LARGE);
+              additionalText = "BASE: NORMAL TRADE";
             }
           }
           if(!writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id)){
             writenOvertimeV2BASETrades.push(overtimeMarketTrade.id);
-            let newVar1 = await redisClient.lpush(writenOvertimeV2BASETrades, overtimeMarketTrade.id);
+            let newVar1 = await redisClient.lpush(overtimeV2BASETradesKey, overtimeMarketTrade.id);
             if(isSGP){
               embed.fields.push(
                   {
@@ -2097,7 +2385,16 @@ async function getOvertimeV2BASETrades(){
               );
             }
 
-            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id)
+            if(smartTicketOwner){
+              embed.fields.push(
+                  {
+                    name: ":coin: Smart ticket owner:",
+                    value: smartTicketOwner,
+                  }
+              );
+            }
+
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText)
             console.log("#@#@#@Sending base message: "+JSON.stringify(embed));
           }
         } else {
@@ -2124,7 +2421,7 @@ async function getOvertimeV2BASETrades(){
                       ")",
                 },
                 {
-                  name: ":link: Ticket address:",
+                  name: TICKET_ADDRESS_LABEL,
                   value:
                       "[" +
                       overtimeMarketTrade.id +
@@ -2187,7 +2484,7 @@ async function getOvertimeV2BASETrades(){
                       ")",
                 },
                 {
-                  name: ":link: Ticket address:",
+                  name: TICKET_ADDRESS_LABEL,
                   value:
                       "[" +
                       overtimeMarketTrade.id +
@@ -2231,26 +2528,29 @@ async function getOvertimeV2BASETrades(){
             };
           }
           let overtimeTradesChannel;
+          let additionalText;
           if(Number(multiplier*amountInCurrency)<500){
             if(payoutInCurrency>=1000){
               overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1334191185694294076");
+                  .fetch(CHANNEL_BASE_BIG_PAYOUT);
             } else if(overtimeMarketTrade.isLive){
               overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1334191049454780478");
+                  .fetch(CHANNEL_BASE_LIVE_SMALL);
 
             } else {
               overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1334190781115928677");
+                  .fetch(CHANNEL_BASE_SMALL);
             }
           } else{
             if(overtimeMarketTrade.isLive){
               overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1334191112310489210");
+                  .fetch(CHANNEL_BASE_LIVE_LARGE);
+              additionalText = "BASE: LIVE TRADE";
 
             } else {
               overtimeTradesChannel = await clientNewListings.channels
-                  .fetch("1334190954969825300");
+                  .fetch(CHANNEL_BASE_LARGE);
+              additionalText = "BASE: NORMAL TRADE";
             }
           }
 
@@ -2266,7 +2566,17 @@ async function getOvertimeV2BASETrades(){
                   }
               );
             }
-            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id)
+
+            if(smartTicketOwner){
+              embed.fields.push(
+                  {
+                    name: ":coin: Smart ticket owner:",
+                    value: smartTicketOwner,
+                  }
+              );
+            }
+
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText)
             console.log("#@#@#@Sending base message: "+JSON.stringify(embed));
           }
         }
@@ -2278,3 +2588,41 @@ async function getOvertimeV2BASETrades(){
     }
   }
 }
+
+async function cleanUpDuplicateMessages() {
+  for (const channelId of ALL_CHANNEL_IDS) {
+    try {
+      const channel = await clientNewListings.channels.fetch(channelId);
+      const messages = await channel.messages.fetch({ limit: 50 });
+
+      const seenTickets = new Map();
+
+      for (const [id, message] of messages) {
+        if (!message.embeds || message.embeds.length === 0) continue;
+
+        const ticketField = message.embeds
+            .flatMap(embed => embed.fields || [])
+            .find(field => field.name === TICKET_ADDRESS_LABEL || field.name === ":link: Ticket  address:");
+        if (!ticketField || !ticketField.value) continue;
+
+        const ticketIdMatch = ticketField.value.match(/\[([^\]]+)\]/); // extract content from [ticketId](...)
+        if (!ticketIdMatch) continue;
+
+        const ticketId = ticketIdMatch[1];
+
+        if (seenTickets.has(ticketId)) {
+          console.log(`Deleting duplicate message in channel ${channelId} for ticket: ${ticketId}`);
+          await message.delete().catch(console.error);
+        } else {
+          seenTickets.set(ticketId, message);
+        }
+      }
+
+    } catch (err) {
+      console.error(`❌ Error cleaning up messages in channel ${channelId}:`, err);
+    }
+  }
+}
+
+
+
