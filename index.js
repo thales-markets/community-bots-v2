@@ -55,6 +55,7 @@ let overtimeV2ARBTradesKey = "overtimeV2ARBTradesKey";
 let overtimeV2BASETradesKey = "overtimeV2BASETradesKey";
 let FREE_BET_OP = "0x8D18e68563d53be97c2ED791CA4354911F16A54B";
 let STAKING_OP = "0x5e6D44B17bc989652920197790eF626b8a84e219";
+let MOLLY_BETS ="0x1cA826587Ee86E44F2D8517E0F1A376F6dABC9c0";
 
 let FREE_BET_BASE = "0x2929Cf1edAc2DB91F68e2822CEc25736cAe029bf";
 let STAKING_BASE = "0x84aB38e42D8Da33b480762cCa543eEcA6135E040";
@@ -108,6 +109,10 @@ const CHANNEL_BASE_LIVE_SMALL = "1334191049454780478";
 const CHANNEL_BASE_LARGE = "1334190954969825300";
 const CHANNEL_BASE_LIVE_LARGE = "1334191112310489210";
 const CHANNEL_BASE_BIG_PAYOUT = "1334191185694294076";
+
+const MOLLY_CHANNEL_ID_ARB = "1414626884934828102";
+const MOLLY_CHANNEL_ID_OP = "1414626846246568007";
+const MOLLY_CHANNEL_ID_BASE = "1414627646003740775";
 
 const userDukaIdForBigTrades = '340872297630138370';
 const userLukaIdForBigTrades = '696035982394523799';
@@ -222,7 +227,7 @@ function  formatV2ARBAmount(numberForFormating, collateralAddress) {
 
 
 
-async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additionalText) {
+async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additionalText,mollyChannel) {
   const messages = await channel.messages.fetch({ limit: 100 });
 
   const duplicate = messages.find(msg => {
@@ -239,7 +244,9 @@ async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additional
     console.log(`Embed with value "${uniqueValue}" already exists.`);
     return;
   }
-
+  if(mollyChannel){
+  mollyChannel.send({ embeds: [embed] }).catch(console.error);
+  }
   channel.send({ embeds: [embed] }).catch(console.error);
   if(additionalText){
     embed.fields.push(
@@ -248,17 +255,26 @@ async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additional
           value: additionalText,
         }
     );
-    await sendDirectMessageToUser(embed);
+    await sendDirectMessageToUser(embed, additionalText);
   }
 }
 
-async function sendDirectMessageToUser(embed) {
+async function sendDirectMessageToUser(embed, additionalText) {
   try {
     const userDuka = await clientNewListings.users.fetch(userDukaIdForBigTrades);
     const userLuka = await clientNewListings.users.fetch(userLukaIdForBigTrades);
 
-    await userLuka.send({ embeds: [embed] });
-    await userDuka.send({ embeds: [embed] }); // ✅ Only sending embed here
+    const dmEmbed = { ...embed, fields: [...embed.fields] };
+
+    if (dmEmbed.fields && dmEmbed.fields.length > 0) {
+      dmEmbed.fields[0] = {
+        ...dmEmbed.fields[0],
+        value: dmEmbed.fields[0].value + (" "+additionalText)
+      };
+    }
+
+    await userLuka.send({ embeds: [dmEmbed] });
+    await userDuka.send({ embeds: [dmEmbed] });
     console.log(`✅ Embed DM sent to ${userDuka.tag}`);
   } catch (error) {
     console.error(`❌ Could not send DM to user ID:`, error);
@@ -1087,6 +1103,13 @@ async function getOvertimeV2Trades(){
           ticketOwner = overtimeMarketTrade.ticketOwner;
         }
 
+        let mollyChannel;
+        if(MOLLY_BETS.toLowerCase() == overtimeMarketTrade.ticketOwner.toLowerCase()){
+          mollyChannel = await clientNewListings.channels
+              .fetch(MOLLY_CHANNEL_ID_OP);
+          console.log("##### Molly bet detected for ticket "+overtimeMarketTrade.id);
+        }
+
         let isSystem = overtimeMarketTrade.isSystem;
         let mustWins;
         if(isSystem){
@@ -1118,6 +1141,9 @@ async function getOvertimeV2Trades(){
           buyInAmountUSD = " ("+roundTo2Decimals(amountInCurrency * multiplier) + " $)";
           payoutInUSD = " ("+roundTo2Decimals(payoutInCurrency) + " $)";
         }
+        
+
+
         let isSGP = await v2Contract.methods.isSGPTicket(overtimeMarketTrade.id).call();
         if (overtimeMarketTrade.marketsData.length==1) {
           let {marketType, marketMessage, betMessage} = await getV2MessageContent(overtimeMarketTrade,typeMap);
@@ -1309,7 +1335,7 @@ async function getOvertimeV2Trades(){
             );
           }
 
-          await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText);
+          await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText,mollyChannel);
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
           redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
 
@@ -1484,7 +1510,7 @@ async function getOvertimeV2Trades(){
             );
           }
 
-          await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText);
+          await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel);
 
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
           redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
@@ -1632,6 +1658,7 @@ async function robustGetTicketsData(ticketContract, ids, labelBase = 'getTickets
 }
 
 
+
 async function getOvertimeV2ARBTrades(){
 
   if (!typeInfoMap) return;
@@ -1660,6 +1687,13 @@ async function getOvertimeV2ARBTrades(){
         let smartTicketOwner;
         if (isSmart){
           smartTicketOwner = await getOwnerOfSmartAccount(esoARBContract,overtimeMarketTrade.ticketOwner);
+        }
+
+        let mollyChannel ;
+        if(MOLLY_BETS.toLowerCase() == overtimeMarketTrade.ticketOwner.toLowerCase()){
+          mollyChannel = await clientNewListings.channels
+              .fetch(MOLLY_CHANNEL_ID_ARB);
+          console.log("##### Molly bet detected for ticket "+overtimeMarketTrade.id);
         }
 
         let isSystem = overtimeMarketTrade.isSystem;
@@ -1905,7 +1939,7 @@ async function getOvertimeV2ARBTrades(){
               );
             }
 
-            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText)
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel)
           console.log("#@#@#@Sending arb message: "+JSON.stringify(embed));
           }
         } else {
@@ -2084,7 +2118,7 @@ async function getOvertimeV2ARBTrades(){
               );
             }
 
-            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText)
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel)
             console.log("#@#@#@Sending arb message: "+JSON.stringify(embed));
           }
         }
@@ -2158,6 +2192,14 @@ async function getOvertimeV2BASETrades(){
         }else {
           mustWins = overtimeMarketTrade.marketsData.length+"/"+overtimeMarketTrade.marketsData.length;
         }
+
+        let mollyChannel ;
+        if(MOLLY_BETS.toLowerCase() == overtimeMarketTrade.ticketOwner.toLowerCase()){
+          mollyChannel  = await clientNewListings.channels
+              .fetch(MOLLY_CHANNEL_ID_BASE);
+          console.log("##### Molly bet detected for ticket "+overtimeMarketTrade.id);
+        }
+
         let moneySymbol;
         let multiplier = 1;
 
@@ -2394,7 +2436,7 @@ async function getOvertimeV2BASETrades(){
               );
             }
 
-            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText)
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel)
             console.log("#@#@#@Sending base message: "+JSON.stringify(embed));
           }
         } else {
@@ -2576,7 +2618,7 @@ async function getOvertimeV2BASETrades(){
               );
             }
 
-            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText)
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel)
             console.log("#@#@#@Sending base message: "+JSON.stringify(embed));
           }
         }
