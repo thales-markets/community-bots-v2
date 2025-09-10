@@ -227,7 +227,7 @@ function  formatV2ARBAmount(numberForFormating, collateralAddress) {
 
 
 
-async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additionalText,mollyChannel) {
+async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additionalText,mollyChannel,bigWinChannel) {
   const messages = await channel.messages.fetch({ limit: 100 });
 
   const duplicate = messages.find(msg => {
@@ -246,6 +246,9 @@ async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additional
   }
   if(mollyChannel){
   mollyChannel.send({ embeds: [embed] }).catch(console.error);
+  }
+  if(bigWinChannel){
+    bigWinChannel.send({ embeds: [embed] }).catch(console.error);
   }
   channel.send({ embeds: [embed] }).catch(console.error);
   if(additionalText){
@@ -1063,6 +1066,11 @@ async function getV2ParlayMessage(overtimeMarketTrade, parlayMessage,typeMap) {
 
 const OVER_ADDRESS_OP = "0xedf38688b27036816a50185caa430d5479e1c63e";
 
+const CHANNEL_OP_BIG_WIN = "1415088775528190032";
+const CHANNEL_BASE_BIG_WIN = "1415089227904848013";
+const CHANNEL_ARB_BIG_WIN = "1415088972673056799";
+
+
 async function getOvertimeV2Trades(){
 
   if (!typeInfoMap) return;
@@ -1141,7 +1149,12 @@ async function getOvertimeV2Trades(){
           buyInAmountUSD = " ("+roundTo2Decimals(amountInCurrency * multiplier) + " $)";
           payoutInUSD = " ("+roundTo2Decimals(payoutInCurrency) + " $)";
         }
-        
+        let isBigWinChannel;
+        if(overtimeMarketTrade.isUserTheWinner && (overtimeMarketTrade>=5000 || odds>=199)){
+            isBigWinChannel = await clientNewListings.channels
+                .fetch(CHANNEL_OP_BIG_WIN);
+            console.log("##### Big win detected for ticket "+overtimeMarketTrade.id);
+        }
 
 
         let isSGP = await v2Contract.methods.isSGPTicket(overtimeMarketTrade.id).call();
@@ -1335,7 +1348,7 @@ async function getOvertimeV2Trades(){
             );
           }
 
-          await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText,mollyChannel);
+          await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText,mollyChannel,isBigWinChannel);
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
           redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
 
@@ -1510,7 +1523,7 @@ async function getOvertimeV2Trades(){
             );
           }
 
-          await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel);
+          await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel,isBigWinChannel);
 
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
           redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
@@ -1743,6 +1756,12 @@ async function getOvertimeV2ARBTrades(){
           buyInAmountUSD = " ("+roundTo2Decimals(amountInCurrency * multiplier) + " $)";
           payoutInUSD = " ("+roundTo2Decimals(payoutInCurrency) + " $)";
         }
+        let isBigWinChannel;
+        if(overtimeMarketTrade.isUserTheWinner && (overtimeMarketTrade>=5000 || odds>=199)){
+          isBigWinChannel = await clientNewListings.channels
+              .fetch(CHANNEL_ARB_BIG_WIN);
+          console.log("##### Big win detected for ticket "+overtimeMarketTrade.id);
+        }
         let isSGP = await v2ARBContract.methods.isSGPTicket(overtimeMarketTrade.id).call();
         if (overtimeMarketTrade.marketsData.length==1) {
           let {marketType, marketMessage, betMessage} = await getV2MessageContent(overtimeMarketTrade,typeMap);
@@ -1939,7 +1958,7 @@ async function getOvertimeV2ARBTrades(){
               );
             }
 
-            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel)
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel,isBigWinChannel)
           console.log("#@#@#@Sending arb message: "+JSON.stringify(embed));
           }
         } else {
@@ -2118,7 +2137,7 @@ async function getOvertimeV2ARBTrades(){
               );
             }
 
-            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel)
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel,isBigWinChannel)
             console.log("#@#@#@Sending arb message: "+JSON.stringify(embed));
           }
         }
@@ -2238,6 +2257,12 @@ async function getOvertimeV2BASETrades(){
         if (multiplier !== 1) {
           buyInAmountUSD = " ("+roundTo2Decimals(amountInCurrency * multiplier) + " $)";
           payoutInUSD = " ("+roundTo2Decimals(payoutInCurrency) + " $)";
+        }
+        let isBigWinChannel;
+        if(overtimeMarketTrade.isUserTheWinner && (overtimeMarketTrade>=5000 || odds>=199)){
+          isBigWinChannel = await clientNewListings.channels
+              .fetch(CHANNEL_BASE_BIG_WIN);
+          console.log("##### Big win detected for ticket "+overtimeMarketTrade.id);
         }
         let isSGP = await v2BASEContract.methods.isSGPTicket(overtimeMarketTrade.id).call();
         if (overtimeMarketTrade.marketsData.length==1) {
@@ -2436,7 +2461,7 @@ async function getOvertimeV2BASETrades(){
               );
             }
 
-            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel)
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel,isBigWinChannel)
             console.log("#@#@#@Sending base message: "+JSON.stringify(embed));
           }
         } else {
@@ -2618,7 +2643,7 @@ async function getOvertimeV2BASETrades(){
               );
             }
 
-            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel)
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel,isBigWinChannel)
             console.log("#@#@#@Sending base message: "+JSON.stringify(embed));
           }
         }
