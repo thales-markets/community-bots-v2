@@ -36,6 +36,40 @@ const web3OP   = new Web3(new Web3.providers.HttpProvider(process.env.DRPC_OP_UR
 const web3ARB  = new Web3(new Web3.providers.HttpProvider(process.env.DRPC_ARB_URL,  { timeout: 30000 }));
 const web3BASE = new Web3(new Web3.providers.HttpProvider(process.env.DRPC_BASE_URL, { timeout: 30000 }));
 
+const { Telegraf } = require('telegraf');
+const path = require('path');
+const puppeteer = require('puppeteer');
+const tg = new Telegraf(process.env.TG_OVERTIME_BOT_TOKEN);
+const cron = require('node-cron');
+
+const multipliersUrl = 'https://overdrop.overtime.io/game-multipliers';
+const networkId = 10; // Optimism
+const adminApiKey = process.env.OVER_API_KEY;
+const tz = 'Etc/GMT-1';
+const DISCORD_ANNOUNCEMENTS = '906495542744469544';
+const DISCORD_MONEY_TIPS     = '1407664919033413705';
+
+const TG_CHAT_ID = -1003066123689;
+const TIPS_THREAD_ID = 5;
+const WINNING_THREAD_ID = 17;
+const LEADERBOARD_THREAD_ID = 15;
+
+const channelDiscTGRouting = {
+  [DISCORD_ANNOUNCEMENTS]: {
+    chatId: TG_CHAT_ID,
+    threadId: null,
+    label: '📣 | announcements',
+  },
+  [DISCORD_MONEY_TIPS]: {
+    chatId: TG_CHAT_ID,
+    threadId: TIPS_THREAD_ID,
+    label: '💸 | tax-free-money-tips',
+  }
+};
+
+const allowedDiscordChannelIds = new Set(Object.keys(channelDiscTGRouting));
+
+
 
 let arbitrumRaw = fs.readFileSync('contracts/arbitrum.json');
 let arbitrumContract = JSON.parse(arbitrumRaw);
@@ -227,7 +261,7 @@ function  formatV2ARBAmount(numberForFormating, collateralAddress) {
 
 
 
-async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additionalText,mollyChannel,bigWinChannel) {
+async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additionalText,mollyChannel,bigWinChannel,bigWinTicketURL) {
   const messages = await channel.messages.fetch({ limit: 100 });
 
   const duplicate = messages.find(msg => {
@@ -249,6 +283,7 @@ async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additional
   }
   if(bigWinChannel){
     bigWinChannel.send({ embeds: [embed] }).catch(console.error);
+    await captureTicketAndSendToTelegram(bigWinTicketURL, { tg, TG_CHAT_ID, WINNING_THREAD_ID, filename: 'winning-ticket.png' });
   }
   channel.send({ embeds: [embed] }).catch(console.error);
   if(additionalText){
@@ -1150,9 +1185,10 @@ async function getOvertimeV2Trades(){
           payoutInUSD = " ("+roundTo2Decimals(payoutInCurrency) + " $)";
         }
         let isBigWinChannel;
-        if(overtimeMarketTrade.isUserTheWinner && (overtimeMarketTrade>=5000 || odds>=199)){
+        if(overtimeMarketTrade.isUserTheWinner && (payoutInCurrency>=5000 || odds>=5)){
             isBigWinChannel = await clientNewListings.channels
                 .fetch(CHANNEL_OP_BIG_WIN);
+
             console.log("##### Big win detected for ticket "+overtimeMarketTrade.id);
         }
 
@@ -1523,7 +1559,7 @@ async function getOvertimeV2Trades(){
             );
           }
 
-          await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel,isBigWinChannel);
+          await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel,isBigWinChannel,overtimeMarketTrade.id);
 
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
           redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
@@ -1757,7 +1793,7 @@ async function getOvertimeV2ARBTrades(){
           payoutInUSD = " ("+roundTo2Decimals(payoutInCurrency) + " $)";
         }
         let isBigWinChannel;
-        if(overtimeMarketTrade.isUserTheWinner && (overtimeMarketTrade>=5000 || odds>=199)){
+        if(overtimeMarketTrade.isUserTheWinner && (payoutInCurrency>=5000 || odds>=5)){
           isBigWinChannel = await clientNewListings.channels
               .fetch(CHANNEL_ARB_BIG_WIN);
           console.log("##### Big win detected for ticket "+overtimeMarketTrade.id);
@@ -1958,7 +1994,7 @@ async function getOvertimeV2ARBTrades(){
               );
             }
 
-            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel,isBigWinChannel)
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel,isBigWinChannel,overtimeMarketTrade.id)
           console.log("#@#@#@Sending arb message: "+JSON.stringify(embed));
           }
         } else {
@@ -2137,7 +2173,7 @@ async function getOvertimeV2ARBTrades(){
               );
             }
 
-            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel,isBigWinChannel)
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel,isBigWinChannel,overtimeMarketTrade.id)
             console.log("#@#@#@Sending arb message: "+JSON.stringify(embed));
           }
         }
@@ -2259,7 +2295,7 @@ async function getOvertimeV2BASETrades(){
           payoutInUSD = " ("+roundTo2Decimals(payoutInCurrency) + " $)";
         }
         let isBigWinChannel;
-        if(overtimeMarketTrade.isUserTheWinner && (overtimeMarketTrade>=5000 || odds>=199)){
+        if(overtimeMarketTrade.isUserTheWinner && (payoutInCurrency>=5000 || odds>=5)){
           isBigWinChannel = await clientNewListings.channels
               .fetch(CHANNEL_BASE_BIG_WIN);
           console.log("##### Big win detected for ticket "+overtimeMarketTrade.id);
@@ -2461,7 +2497,7 @@ async function getOvertimeV2BASETrades(){
               );
             }
 
-            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel,isBigWinChannel)
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel,isBigWinChannel,overtimeMarketTrade.id)
             console.log("#@#@#@Sending base message: "+JSON.stringify(embed));
           }
         } else {
@@ -2643,7 +2679,7 @@ async function getOvertimeV2BASETrades(){
               );
             }
 
-            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel,isBigWinChannel)
+            await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel,isBigWinChannel,overtimeMarketTrade.id)
             console.log("#@#@#@Sending base message: "+JSON.stringify(embed));
           }
         }
@@ -2691,5 +2727,473 @@ async function cleanUpDuplicateMessages() {
   }
 }
 
+function formatDiscordMessageForTelegram(message, label) {
+  const author = message.author?.username ?? 'Unknown';
+  const content = cleanDiscordContent((message.content || '').trim());
+
+  const embedText = (message.embeds || [])
+      .map(e => {
+        const title = e.title ? `\n*${cleanDiscordContent(e.title)}*` : '';
+        const desc  = e.description ? `\n${cleanDiscordContent(e.description)}` : '';
+        return `${title}${desc}`;
+      })
+      .join('');
+
+  const permalink = `https://discord.com/channels/${message.guild?.id}/${message.channel?.id}/${message.id}`;
+  const header = label ? `*${label}*` : '*From Discord*';
+
+  const text = `${header}\n*${author}:* ${content || '(no text)'}${embedText}\n\n[View on Discord](${permalink})`;
+
+  return { text, parse_mode: 'Markdown' };
+}
 
 
+
+async function sendToTelegram(chatId, threadId, text, opts = {}) {
+  const payload = {
+    parse_mode: 'Markdown',
+    disable_web_page_preview: true,
+    ...opts,
+  };
+  // Only include message_thread_id if we actually have one
+  if (typeof threadId === 'number') payload.message_thread_id = threadId;
+
+  return tg.telegram.sendMessage(chatId, text, payload);
+}
+
+async function forwardAttachmentsToTelegram(attachments, chatId, threadId) {
+  for (const att of attachments.values()) {
+    const url = att.url;
+    const fileName = att.name || 'file';
+    const contentType = att.contentType || '';
+    const isImage = contentType.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(fileName);
+
+    try {
+      const { data } = await axios.get(url, { responseType: 'arraybuffer' });
+      const file = { source: Buffer.from(data), filename: fileName };
+      const baseOpts = {};
+      if (typeof threadId === 'number') baseOpts.message_thread_id = threadId;
+
+      if (isImage) {
+        await tg.telegram.sendPhoto(chatId, file, baseOpts);
+      } else {
+        await tg.telegram.sendDocument(chatId, file, baseOpts);
+      }
+    } catch (e) {
+      console.error(`Failed to forward attachment ${fileName}:`, e?.response?.status || e.message);
+    }
+  }
+}
+
+clientNewListings.on('messageCreate', async (message) => {
+  try {
+    if (!message.guild) return;           // ignore DMs
+    if (message.author?.bot) return;      // ignore bots
+
+    const route = channelDiscTGRouting[message.channel.id];
+    if (!route) return;                   // only forward mapped channels
+
+    const { chatId, threadId, label } = route;
+
+    const { text, parse_mode } = formatDiscordMessageForTelegram(message, label);
+
+
+    await sendToTelegram(chatId, threadId, text, { parse_mode });
+
+    if (message.attachments?.size) {
+      await forwardAttachmentsToTelegram(message.attachments, chatId, threadId);
+    }
+  } catch (err) {
+    console.error('Forwarding error:', err?.response?.data?.description || err.message);
+  }
+});
+
+function cleanDiscordContent(input) {
+  if (!input) return '';
+
+  return input
+      // remove custom emoji tags like <:name:123456789012345678> or <a:name:123456789012345678>
+      .replace(/<a?:\w+:\d+>/g, '')
+      // remove Nitro-style shortcodes like :GREENCHECK: or :pepelaugh:
+      .replace(/:\w+?:/g, '')
+      .trim();
+}
+
+function toTicketUrl(urlOrId) {
+  if (/^https?:\/\//i.test(urlOrId)) return urlOrId;
+  if (/^0x[a-fA-F0-9]{8,}$/.test(urlOrId)) {
+    return `https://www.overtimemarkets.xyz/tickets/${urlOrId}`;
+  }
+  throw new Error(`Not a valid ticket URL or id: ${urlOrId}`);
+}
+
+/**
+ * Screenshot the ticket card and (optionally) send it to Telegram.
+ * urlOrId:  full ticket URL or "0x..." id
+ * opts:     { tg, chatId, threadId, caption, filename, viewportWidth, viewportHeight, deviceScaleFactor, timeoutMs }
+ * Returns a Buffer with the PNG.
+ */
+async function captureTicketAndSendToTelegram(
+    urlOrId,
+    {
+      tg,
+      chatId = -1003066123689,                 // send to TG only if provided
+      threadId = 17,
+      caption = undefined,
+      filename = 'ticket.png',
+      viewportWidth = 1920,
+      viewportHeight = 1080,
+      deviceScaleFactor = 2,
+      timeoutMs = 45000,
+    } = {}
+) {
+  const url = toTicketUrl(urlOrId);
+
+  const browser = await puppeteer.launch({
+    headless: true, // <-- this matches your working script
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    defaultViewport: { width: viewportWidth, height: viewportHeight, deviceScaleFactor },
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setUserAgent(
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36'
+    );
+
+    // Go to ticket
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: timeoutMs });
+    await page.waitForTimeout(1200); // small settle
+
+    // ---- Locate the card using XPath-first strategy ----
+    const handle = await locateTicketCard(page, timeoutMs);
+    if (!handle) throw new Error('Ticket card element not found');
+
+    // Ensure it’s in view
+    await handle.evaluate(el => el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' }));
+    await page.waitForTimeout(150);
+
+    // Direct element screenshot (tight crop)
+    const buffer = await handle.screenshot({ type: 'png' });
+
+    // Optional Telegram send
+    if (tg && typeof chatId === 'number') {
+      const extra = {};
+      if (typeof threadId === 'number') extra.message_thread_id = threadId;
+      if (caption) extra.caption = caption;
+
+      await tg.telegram.sendPhoto(
+          chatId,
+          { source: buffer, filename: path.basename(filename) },
+          extra
+      );
+    }
+
+    return buffer;
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
+/**
+ * Robust locator for the ticket card.
+ * Primary: find the <span> that contains "ticket" (case-insensitive) and take an ancestor div.
+ * Fallbacks: use "payout", "total quote", "buy-in" anchors and pick the smallest valid container.
+ */
+async function locateTicketCard(page, timeoutMs) {
+  // Helpers
+  const A2Z = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const a2z = 'abcdefghijklmnopqrstuvwxyz';
+  const lower = `translate(normalize-space(.), '${A2Z}', '${a2z}')`;
+
+  // 1) Your known-working XPath (prefer this)
+  const xpaths = [
+    // climb 3 containers above the "ticket" label (tuned to current DOM)
+    `//span[contains(${lower}, 'ticket')]/ancestor::div[3]`,
+    // alternative climb depths in case of slight DOM shifts
+    `//span[contains(${lower}, 'ticket')]/ancestor::div[2]`,
+    `//span[contains(${lower}, 'ticket')]/ancestor::div[4]`,
+    // anchor on "payout" and climb (currency varies, so we key on the word)
+    `//*[contains(${lower}, 'payout')]/ancestor::div[6]`,
+    `//*[contains(${lower}, 'total quote')]/ancestor::div[6]`,
+    `//*[contains(${lower}, 'buy-in')]/ancestor::div[6]`,
+  ];
+
+  const deadline = Date.now() + Math.max(4000, Math.min(15000, timeoutMs / 3));
+  let candidates = [];
+
+  // Try each xpath, collect any matching elements
+  for (const xp of xpaths) {
+    try {
+      const els = await page.$x(xp);
+      if (els && els.length) candidates.push(...els);
+    } catch (_) {}
+    if (Date.now() > deadline) break;
+  }
+
+  // If nothing yet, wait briefly for the main one and retry once
+  if (candidates.length === 0) {
+    try {
+      await page.waitForXPath(xpaths[0], { timeout: 3000 });
+      const els = await page.$x(xpaths[0]);
+      if (els && els.length) candidates.push(...els);
+    } catch (_) {}
+  }
+
+  if (candidates.length === 0) return null;
+
+  // Score candidates: prefer smallest area above thresholds (tight card), then closeness to viewport center
+  const { width: vw, height: vh } = await page.viewport();
+  let best = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  for (const el of candidates) {
+    const box = await el.boundingBox().catch(() => null);
+    if (!box) continue;
+
+    // sanity: ignore tiny wrappers
+    if (box.width < 380 || box.height < 180) continue;
+
+    const area = box.width * box.height;
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    const centerDist2 = (cx - vw / 2) ** 2 + (cy - vh / 2) ** 2;
+
+    // smaller area + center bias
+    const score = area * 1.0 + centerDist2 * 0.001;
+    if (score < bestScore) {
+      bestScore = score;
+      best = el;
+    }
+  }
+
+  return best;
+}
+
+const gameInfoUrl = (gameId) =>
+    `https://api.overtime.io/overtime-v2/games-info/${gameId}`;
+
+const marketBasicUrl = (marketId) =>
+    `https://api.overtime.io/overtime-v2/networks/${networkId}/markets/${marketId}?onlyBasicProperties=true&adminApiKey=${encodeURIComponent(adminApiKey)}`;
+
+const marketDeepLink = (marketId) =>
+    `https://www.overtimemarkets.xyz/markets/${marketId}`;
+
+// ===== Cache =====
+/**
+ * cachedUpcomingDayMarkets: Array<{
+ *   marketId: string,       // same as gameId from multipliers feed
+ *   multiplier: string,     // as received
+ *   maturityMs: number,     // milliseconds
+ *   gameName: string        // "Home - Away"
+ * }>
+ */
+let cachedUpcomingDayMarkets = [];
+const gameNameById = new Map();
+
+// ===== Helpers =====
+function parseMaturityMs(raw) {
+  if (raw == null) return null;
+  const n = Number(raw);
+  if (Number.isNaN(n)) return null;
+  // seconds vs milliseconds
+  return n < 1e12 ? n * 1000 : n;
+}
+
+function fmtTimeCET(ms) {
+  // CET fixed: add +1h, then format in UTC
+  const d = new Date(ms + 60 * 60 * 1000);
+  const hhmm = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'UTC',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(d);
+  return `${hhmm} CET`;
+}
+
+function formatPercent(multiplier) {
+  const n = Number(multiplier);
+  if (Number.isNaN(n)) return `${multiplier}%`;
+  const pct = n <= 1 ? n * 100 : n; // supports 0.1 or 10
+  return `${Number.isInteger(pct) ? pct.toFixed(0) : pct.toFixed(2)}%`;
+}
+
+async function getGameMessage(gameId) {
+  const gameResp = await axios.get(gameInfoUrl(gameId), { timeout: 15000 });
+  const game = gameResp.data;
+  let homeTeam, awayTeam;
+  if (game.teams[0].isHome) {
+    homeTeam = game.teams[0].name;
+    awayTeam = game.teams[1].name;
+  } else {
+    awayTeam = game.teams[0].name;
+    homeTeam = game.teams[1].name;
+  }
+  return `${homeTeam} - ${awayTeam}`;
+}
+
+// small concurrency limiter
+async function mapWithLimit(items, limit, mapper) {
+  const results = new Array(items.length);
+  let inFlight = 0;
+  let index = 0;
+
+  return new Promise((resolve) => {
+    const launch = () => {
+      while (inFlight < limit && index < items.length) {
+        const i = index++;
+        inFlight++;
+        Promise.resolve(mapper(items[i], i))
+            .then((res) => { results[i] = res; })
+            .catch(() => { results[i] = undefined; })
+            .finally(() => {
+              inFlight--;
+              if (index === items.length && inFlight === 0) resolve(results);
+              else launch();
+            });
+      }
+    };
+    launch();
+  });
+}
+
+// Build inline keyboard (1 button per row)
+function buildKeyboard(rows) {
+  const maxButtons = 80; // safety cap
+  const limited = rows.slice(0, maxButtons);
+  const keyboard = limited.map(r => ([
+    {
+      text: `${r.gameName} · ${formatPercent(r.multiplier)} · ${fmtTimeCET(r.maturityMs)}`,
+      url: marketDeepLink(r.marketId),
+    }
+  ]));
+  return { reply_markup: { inline_keyboard: keyboard } };
+}
+
+function buildRowsFromCache() {
+  const rows = [...cachedUpcomingDayMarkets];
+  // sort by maturity then by name
+  rows.sort((a, b) => (a.maturityMs - b.maturityMs) || a.gameName.localeCompare(b.gameName));
+  return rows;
+}
+
+async function sendTodayXpTable(chatId, ctxForReply = null, threadId = null) {
+  const rows = buildRowsFromCache();
+  if (!rows.length) {
+    const msg = 'No upcoming “day” XP markets at the moment.';
+    if (ctxForReply) return ctxForReply.reply(msg, threadId ? { message_thread_id: threadId } : undefined);
+    return tg.telegram.sendMessage(chatId, msg, threadId ? { message_thread_id: threadId } : undefined);
+  }
+
+  const header = '<b>Today’s XP Markets</b>\nTap a game to open the market:';
+  const kb = buildKeyboard(rows);
+
+  const opts = {
+    parse_mode: 'HTML',
+    disable_web_page_preview: true,
+    ...(threadId ? { message_thread_id: threadId } : {})
+  };
+
+  if (ctxForReply) {
+    await ctxForReply.reply(header, { ...kb, ...opts });
+  } else {
+    await tg.telegram.sendMessage(chatId, header, { ...kb, ...opts });
+  }
+}
+
+
+
+async function refreshDayGamesCache() {
+  try {
+    if (!adminApiKey) {
+      console.warn('[cache] OVERTIME_ADMIN_API_KEY not set. Skipping market fetch.');
+      cachedUpcomingDayMarkets = [];
+      return;
+    }
+
+    const resp = await axios.get(multipliersUrl, { timeout: 15000 });
+    const all = Array.isArray(resp.data) ? resp.data : [];
+    const now = Date.now();
+
+    const dayGames = all.filter(g => String(g.type).toLowerCase() === 'day');
+
+    const combined = await mapWithLimit(dayGames, 8, async ({ gameId, multiplier }) => {
+      try {
+        const [marketResp, name] = await Promise.all([
+          axios.get(marketBasicUrl(gameId), { timeout: 15000 }),
+          (async () => {
+            if (gameNameById.has(gameId)) return gameNameById.get(gameId);
+            try {
+              const got = await getGameMessage(gameId);
+              gameNameById.set(gameId, got);
+              return got;
+            } catch {
+              gameNameById.set(gameId, '(unavailable)');
+              return '(unavailable)';
+            }
+          })()
+        ]);
+
+        const market = marketResp.data || {};
+        const maturityMs = parseMaturityMs(market.maturity);
+        if (!maturityMs || maturityMs <= now) return undefined;
+
+        return {
+          marketId: gameId, // markets endpoint uses the same id here
+          multiplier: multiplier || '—',
+          maturityMs,
+          gameName: name || '(unavailable)',
+        };
+      } catch {
+        return undefined;
+      }
+    });
+
+    cachedUpcomingDayMarkets = combined.filter(Boolean);
+    console.log(`[cache] Upcoming “day” markets: ${cachedUpcomingDayMarkets.length}`);
+  } catch (e) {
+    console.error('[cache] refresh failed:', e?.response?.status, e?.message);
+  }
+}
+
+// ===== Commands =====
+tg.command(['today_xp', 'today-xp'], async (ctx) => {
+  try {
+    await sendTodayXpTable(ctx.chat.id, ctx);
+  } catch (e) {
+    console.error('/today_xp error:', e?.message);
+    await ctx.reply('Could not prepare XP list right now.');
+  }
+});
+
+tg.command('help', async (ctx) => {
+  await ctx.reply('Commands:\n/today_xp — Show today’s XP markets (type: day, future maturity).');
+});
+
+// ===== Daily post at 09:00 CET (fixed) =====
+cron.schedule('0 16 * * *', async () => {
+  if (!TG_CHAT_ID) {
+    console.warn('[cron] TELEGRAM_CHANNEL_ID not set; skipping daily post.');
+    return;
+  }
+  try {
+    await sendTodayXpTable(TG_CHAT_ID, null, LEADERBOARD_THREAD_ID);
+    console.log('[cron] Posted today XP table at 09:00 CET.');
+  } catch (e) {
+    console.error('[cron] post failed:', e?.message);
+  }
+}, { timezone: tz });
+
+// ===== Hourly cache refresh =====
+setInterval(refreshDayGamesCache, 60 * 60 * 1000);
+
+// ===== Startup =====
+(async () => {
+  await refreshDayGamesCache(); // warm cache once container starts
+  await tg.telegram.setMyCommands([
+    { command: 'today_xp', description: "Show today’s XP markets" },
+    { command: 'help', description: "How to use this bot" },
+  ]);
+  await tg.launch();
+  console.log('Telegram bot running. /today_xp enabled. Daily post at 09:00 CET. Hourly cache refresh active.');
+})();
