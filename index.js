@@ -85,6 +85,7 @@ let v2Contract = new web3OP.eth.Contract(v2ContractRaw,"0x2367FB44C4C2c4E5aAC62d
 let FREE_BET_ARB = "0xd1F2b87a9521315337855A132e5721cfe272BBd9";
 let STAKING_ARB = "0x109e966A4d856B82f158BF528395de6fF36214A8";
 let overtimeV2TradesKey = "overtimeV2TradesKey";
+let overtimeV2BigWinsTradesKey = "overtimeV2BigWinsTradesKey";
 let overtimeV2ARBTradesKey = "overtimeV2ARBTradesKey";
 let overtimeV2BASETradesKey = "overtimeV2BASETradesKey";
 let FREE_BET_OP = "0x8D18e68563d53be97c2ED791CA4354911F16A54B";
@@ -170,6 +171,7 @@ const ALL_CHANNEL_IDS = [
 ];
 
 let writenOvertimeV2Trades = [];
+let writenBigWinTicketsOvertimeV2Trades = [];
 let writenOvertimeV2ARBTrades = [];
 
 let writenOvertimeV2BASETrades = [];
@@ -183,6 +185,11 @@ if (process.env.REDIS_URL) {
   redisClient.lrange(overtimeV2TradesKey, 0, -1, function (err, polygonTrades) {
     writenOvertimeV2Trades = polygonTrades;
   });
+
+  redisClient.lrange(overtimeV2BigWinsTradesKey, 0, -1, function (err, polygonTrades) {
+    writenBigWinTicketsOvertimeV2Trades = polygonTrades;
+  });
+
 
   redisClient.lrange(overtimeV2ARBTradesKey, 0, -1, function (err, polygonTrades) {
     writenOvertimeV2ARBTrades = polygonTrades;
@@ -261,7 +268,7 @@ function  formatV2ARBAmount(numberForFormating, collateralAddress) {
 
 
 
-async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additionalText,mollyChannel,bigWinChannel,bigWinTicketURL) {
+async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additionalText,mollyChannel,bigWinChannel,bigWinTicketID) {
   const messages = await channel.messages.fetch({ limit: 100 });
 
   const duplicate = messages.find(msg => {
@@ -274,6 +281,24 @@ async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additional
     });
   });
 
+  if(bigWinChannel){
+    const messagesBigWin = await bigWinChannel.messages.fetch({ limit: 100 });
+    const duplicateBigWin =   messagesBigWin.find(msg => {
+      return msg.embeds.some(embed => {
+        if (!embed.fields || embed.fields.length === 0) return false;
+
+        return embed.fields.some(field =>
+            field.value.includes(uniqueValue)
+        );
+      });
+    });
+    if (!duplicateBigWin){
+    bigWinChannel.send({ embeds: [embed] }).catch(console.error);
+    await captureTicketAndSendToTelegram(bigWinTicketID, { tg, TG_CHAT_ID, WINNING_THREAD_ID, filename: 'winning-ticket.png' });
+    writenBigWinTicketsOvertimeV2Trades.push(bigWinTicketID);
+    await redisClient.lpush(overtimeV2BigWinsTradesKey, bigWinTicketID);
+  }
+  }
   if (duplicate) {
     console.log(`Embed with value "${uniqueValue}" already exists.`);
     return;
@@ -281,10 +306,7 @@ async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additional
   if(mollyChannel){
   mollyChannel.send({ embeds: [embed] }).catch(console.error);
   }
-  if(bigWinChannel){
-    bigWinChannel.send({ embeds: [embed] }).catch(console.error);
-    await captureTicketAndSendToTelegram(bigWinTicketURL, { tg, TG_CHAT_ID, WINNING_THREAD_ID, filename: 'winning-ticket.png' });
-  }
+
   channel.send({ embeds: [embed] }).catch(console.error);
   if(additionalText){
     embed.fields.push(
@@ -1126,7 +1148,7 @@ async function getOvertimeV2Trades(){
           ))
   )
   for (const overtimeMarketTrade of overtimeTradesUQ) {
-    if (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2Trades.includes(overtimeMarketTrade.id)) {
+    if ((overtimeMarketTrade.isUserTheWinner && !writenBigWinTicketsOvertimeV2Trades.includes(overtimeMarketTrade.id)) || (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2Trades.includes(overtimeMarketTrade.id))) {
       try {
 
         const address = Web3.utils.toChecksumAddress(overtimeMarketTrade.ticketOwner);
@@ -1384,7 +1406,7 @@ async function getOvertimeV2Trades(){
             );
           }
 
-          await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText,mollyChannel,isBigWinChannel);
+          await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText,mollyChannel,isBigWinChannel,overtimeMarketTrade.id);
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
           redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
 
@@ -1728,7 +1750,7 @@ async function getOvertimeV2ARBTrades(){
   )
   console.log("##### length is after dupl "+overtimeTradesUQ.length);
   for (const overtimeMarketTrade of overtimeTradesUQ) {
-    if (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2ARBTrades.includes(overtimeMarketTrade.id)) {
+    if ( overtimeMarketTrade.isUserTheWinner || (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2ARBTrades.includes(overtimeMarketTrade.id))) {
       try {
 
         const address = Web3.utils.toChecksumAddress(overtimeMarketTrade.ticketOwner);
@@ -2231,7 +2253,7 @@ async function getOvertimeV2BASETrades(){
   )
   console.log("##### length is after dupl "+overtimeTradesUQ.length);
   for (const overtimeMarketTrade of overtimeTradesUQ) {
-    if (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id)) {
+    if ( overtimeMarketTrade.isUserTheWinner || (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id))) {
       try {
 
         const address = Web3.utils.toChecksumAddress(overtimeMarketTrade.ticketOwner);
@@ -2785,10 +2807,18 @@ async function forwardAttachmentsToTelegram(attachments, chatId, threadId) {
   }
 }
 
+const allowedUserIdsForTips = [
+  '1138946960095723702',
+  '1320299199937380373',
+  '1005053481180209152'
+];
+
+
 clientNewListings.on('messageCreate', async (message) => {
   try {
     if (!message.guild) return;           // ignore DMs
-    if (message.author?.bot) return;      // ignore bots
+    if (message.author?.bot) return;
+    if (!allowedUserIdsForTips.includes(message.author.id)) return;
 
     const route = channelDiscTGRouting[message.channel.id];
     if (!route) return;                   // only forward mapped channels
@@ -3114,10 +3144,31 @@ async function refreshDayGamesCache() {
     const resp = await axios.get(multipliersUrl, { timeout: 15000 });
     const all = Array.isArray(resp.data) ? resp.data : [];
     const now = Date.now();
+    const next12h = now + 12 * 60 * 60 * 1000;
 
-    const dayGames = all.filter(g => String(g.type).toLowerCase() === 'day');
+    const timeZone = 'Europe/Belgrade';
+    const dtf = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const ymdKey = (ts) =>
+        dtf.formatToParts(ts)
+            .filter(p => p.type === 'year' || p.type === 'month' || p.type === 'day')
+            .map(p => p.value)
+            .join('-');
+    const todayKey = ymdKey(now);
+    const isTodayInTz = (ts) => ymdKey(ts) === todayKey;
+    const isWithinNext12h = (ts) => ts > now && ts <= next12h;
 
-    const combined = await mapWithLimit(dayGames, 8, async ({ gameId, multiplier }) => {
+    // Consider 'day' always; consider 'week' only if today OR within 12 hours
+    const dayOrWeek = all.filter(g => {
+      const type = String(g.type || '').toLowerCase();
+      return type === 'day' || type === 'week';
+    });
+
+    const combined = await mapWithLimit(dayOrWeek, 8, async ({ gameId, multiplier, type }) => {
       try {
         const [marketResp, name] = await Promise.all([
           axios.get(marketBasicUrl(gameId), { timeout: 15000 }),
@@ -3138,6 +3189,13 @@ async function refreshDayGamesCache() {
         const maturityMs = parseMaturityMs(market.maturity);
         if (!maturityMs || maturityMs <= now) return undefined;
 
+        const marketType = String(type || '').toLowerCase();
+
+        // Keep 'day' always; keep 'week' only if (today in CET/CEST) OR (within next 12h)
+        if (!(marketType === 'day' || (marketType === 'week' && (isTodayInTz(maturityMs) || isWithinNext12h(maturityMs))))) {
+          return undefined;
+        }
+
         return {
           marketId: gameId, // markets endpoint uses the same id here
           multiplier: multiplier || '—',
@@ -3150,7 +3208,7 @@ async function refreshDayGamesCache() {
     });
 
     cachedUpcomingDayMarkets = combined.filter(Boolean);
-    console.log(`[cache] Upcoming “day” markets: ${cachedUpcomingDayMarkets.length}`);
+    console.log(`[cache] Upcoming markets (day + qualifying week): ${cachedUpcomingDayMarkets.length}`);
   } catch (e) {
     console.error('[cache] refresh failed:', e?.response?.status, e?.message);
   }
