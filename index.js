@@ -1750,7 +1750,7 @@ async function getOvertimeV2ARBTrades(){
   )
   console.log("##### length is after dupl "+overtimeTradesUQ.length);
   for (const overtimeMarketTrade of overtimeTradesUQ) {
-    if ( overtimeMarketTrade.isUserTheWinner || (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2ARBTrades.includes(overtimeMarketTrade.id))) {
+    if ( (overtimeMarketTrade.isUserTheWinner && !writenBigWinTicketsOvertimeV2Trades.includes(overtimeMarketTrade.id)) || (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2ARBTrades.includes(overtimeMarketTrade.id))) {
       try {
 
         const address = Web3.utils.toChecksumAddress(overtimeMarketTrade.ticketOwner);
@@ -2253,7 +2253,7 @@ async function getOvertimeV2BASETrades(){
   )
   console.log("##### length is after dupl "+overtimeTradesUQ.length);
   for (const overtimeMarketTrade of overtimeTradesUQ) {
-    if ( overtimeMarketTrade.isUserTheWinner || (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id))) {
+    if ( (overtimeMarketTrade.isUserTheWinner && !writenBigWinTicketsOvertimeV2Trades.includes(overtimeMarketTrade.id)) || (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id))) {
       try {
 
         const address = Web3.utils.toChecksumAddress(overtimeMarketTrade.ticketOwner);
