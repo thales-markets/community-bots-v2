@@ -49,15 +49,15 @@ const tz = 'Etc/GMT-1';
 const DISCORD_ANNOUNCEMENTS = '906495542744469544';
 const DISCORD_MONEY_TIPS     = '1407664919033413705';
 
-const TG_CHAT_ID = -1003066123689;
-const TIPS_THREAD_ID = 5;
-const WINNING_THREAD_ID = 17;
-const LEADERBOARD_THREAD_ID = 15;
+const TG_CHAT_ID = -1001668038949;
+const TIPS_THREAD_ID = 4510;
+const WINNING_THREAD_ID = 4514;
+const LEADERBOARD_THREAD_ID = 4512;
 
 const channelDiscTGRouting = {
   [DISCORD_ANNOUNCEMENTS]: {
     chatId: TG_CHAT_ID,
-    threadId: null,
+    threadId: 1,
     label: '📣 | announcements',
   },
   [DISCORD_MONEY_TIPS]: {
@@ -1140,7 +1140,6 @@ async function getOvertimeV2Trades(){
   startdate.setMinutes(startdate.getMinutes() - durationInMinutes);
   let startDateUnixTime = Math.floor(startdate.getTime());
   console.log("##### length before is "+overtimeTrades.length);
-  overtimeTrades = await overtimeTrades.filter(item => !writenOvertimeV2Trades.includes(item.id) && startDateUnixTime < Number(item.createdAt * 1000));
   console.log("##### length is "+overtimeTrades.length);
   let overtimeTradesUQ = await overtimeTrades.filter((value, index, self) =>
           index === self.findIndex((t) => (
@@ -1741,7 +1740,6 @@ async function getOvertimeV2ARBTrades(){
   startdate.setMinutes(startdate.getMinutes() - durationInMinutes);
   let startDateUnixTime = Math.floor(startdate.getTime());
   console.log("##### length before is "+overtimeTrades.length);
-  overtimeTrades = await overtimeTrades.filter(item => !writenOvertimeV2ARBTrades.includes(item.id) && startDateUnixTime < Number(item.createdAt * 1000));
   console.log("##### length is "+overtimeTrades.length);
   let overtimeTradesUQ = await overtimeTrades.filter((value, index, self) =>
           index === self.findIndex((t) => (
@@ -2244,7 +2242,6 @@ async function getOvertimeV2BASETrades(){
   startdate.setMinutes(startdate.getMinutes() - durationInMinutes);
   let startDateUnixTime = Math.floor(startdate.getTime());
   console.log("##### length before is "+overtimeTrades.length);
-  overtimeTrades = await overtimeTrades.filter(item => !writenOvertimeV2BASETrades.includes(item.id) && startDateUnixTime < Number(item.createdAt * 1000));
   console.log("##### length is "+overtimeTrades.length);
   let overtimeTradesUQ = await overtimeTrades.filter((value, index, self) =>
           index === self.findIndex((t) => (
