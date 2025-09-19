@@ -32,9 +32,9 @@ const SYNTH_USD_MAINNET = "0x57ab1ec28d129707052df4df418d58a2d46d5f51";
 const Web3 = require("web3");
 
 
-const web3OP   = new Web3(new Web3.providers.HttpProvider(process.env.DRPC_OP_URL,   { timeout: 30000 }));
-const web3ARB  = new Web3(new Web3.providers.HttpProvider(process.env.DRPC_ARB_URL,  { timeout: 30000 }));
-const web3BASE = new Web3(new Web3.providers.HttpProvider(process.env.DRPC_BASE_URL, { timeout: 30000 }));
+const web3OP   = new Web3(new Web3.providers.HttpProvider(process.env.DRPC_OP_URL,   { timeout: 30000, keepAlive:true }));
+const web3ARB  = new Web3(new Web3.providers.HttpProvider(process.env.DRPC_ARB_URL,  { timeout: 30000 ,keepAlive:true}));
+const web3BASE = new Web3(new Web3.providers.HttpProvider(process.env.DRPC_BASE_URL, { timeout: 30000 ,keepAlive:true}));
 
 
 let arbitrumRaw = fs.readFileSync('contracts/arbitrum.json');
@@ -529,7 +529,7 @@ setInterval(function () {
 setInterval(function () {
   console.log("cleaning duplicates");
   cleanUpDuplicateMessages();
-}, 1 * 60 * 1000);
+}, 2 * 60 * 1000);
 
 setInterval(function () {
   console.log("update prices");
@@ -1334,7 +1334,7 @@ async function getOvertimeV2Trades(){
                 }
             );
           }
-
+            console.log("#@#@#@Sending OP message: "+JSON.stringify(embed));
           await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText,mollyChannel);
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
           redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
@@ -1509,7 +1509,7 @@ async function getOvertimeV2Trades(){
                 }
             );
           }
-
+            console.log("#@#@#@Sending OP message: "+JSON.stringify(embed));
           await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel);
 
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
