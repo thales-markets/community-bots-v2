@@ -1402,6 +1402,7 @@ async function getOvertimeV2Trades(){
           }
 
           await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText,mollyChannel);
+          console.log("#@#@#@Sending V2 message: "+JSON.stringify(embed));
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
           redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
 
@@ -1587,7 +1588,7 @@ async function getOvertimeV2Trades(){
           }
 
           await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id,additionalText,mollyChannel);
-
+          console.log("#@#@#@Sending V2 message: "+JSON.stringify(embed));
           writenOvertimeV2Trades.push(overtimeMarketTrade.id);
           redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
         }
@@ -1749,7 +1750,7 @@ async function getOvertimeV2ARBTrades(){
   overtimeTrades = overtimeTrades.filter(item => {
     const isNewNormal =
         startDateUnixTime < Number(item.createdAt * 1000) &&
-        !writenOvertimeV2Trades.includes(item.id);
+        !writenOvertimeV2ARBTrades.includes(item.id);
 
     return isNewNormal ;
   });console.log("##### length is "+overtimeTrades.length);
@@ -2280,7 +2281,7 @@ async function getOvertimeV2BASETrades(){
   overtimeTrades = overtimeTrades.filter(item => {
     const isNewNormal =
         startDateUnixTime < Number(item.createdAt * 1000) &&
-        !writenOvertimeV2Trades.includes(item.id);
+        !writenOvertimeV2BASETrades.includes(item.id);
 
 
     return isNewNormal;
