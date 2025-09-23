@@ -1131,7 +1131,7 @@ async function getOvertimeV2Trades(){
           ))
   )
   for (const overtimeMarketTrade of overtimeTradesUQ) {
-    if ((overtimeMarketTrade.isUserTheWinner && !writenBigWinTicketsOvertimeV2Trades.includes(overtimeMarketTrade.id)) || (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2Trades.includes(overtimeMarketTrade.id))) {
+    if ((startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2Trades.includes(overtimeMarketTrade.id))) {
       try {
 
         if (
@@ -1751,12 +1751,6 @@ async function getOvertimeV2ARBTrades(){
         startDateUnixTime < Number(item.createdAt * 1000) &&
         !writenOvertimeV2Trades.includes(item.id);
 
- /*   const isNewBigWin =
-        item.isUserTheWinner &&
-        !writenBigWinTicketsOvertimeV2Trades.includes(item.id) &&
-        tradeTimeMs(item) >= startDateUnixTime;*/
-
-
     return isNewNormal ;
   });console.log("##### length is "+overtimeTrades.length);
   let overtimeTradesUQ = await overtimeTrades.filter((value, index, self) =>
@@ -1766,7 +1760,7 @@ async function getOvertimeV2ARBTrades(){
   )
   console.log("##### length is after dupl "+overtimeTradesUQ.length);
   for (const overtimeMarketTrade of overtimeTradesUQ) {
-    if ( (overtimeMarketTrade.isUserTheWinner && !writenBigWinTicketsOvertimeV2Trades.includes(overtimeMarketTrade.id)) || (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2ARBTrades.includes(overtimeMarketTrade.id))) {
+    if ((startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2ARBTrades.includes(overtimeMarketTrade.id))) {
       try {
         if (
             !overtimeMarketTrade ||
@@ -2288,10 +2282,6 @@ async function getOvertimeV2BASETrades(){
         startDateUnixTime < Number(item.createdAt * 1000) &&
         !writenOvertimeV2Trades.includes(item.id);
 
-   /* const isNewBigWin =
-        item.isUserTheWinner &&
-        !writenBigWinTicketsOvertimeV2Trades.includes(item.id) &&
-        tradeTimeMs(item) >= startDateUnixTime;*/
 
     return isNewNormal;
   });console.log("##### length is "+overtimeTrades.length);
@@ -2302,7 +2292,7 @@ async function getOvertimeV2BASETrades(){
   )
   console.log("##### length is after dupl "+overtimeTradesUQ.length);
   for (const overtimeMarketTrade of overtimeTradesUQ) {
-    if ( (overtimeMarketTrade.isUserTheWinner && !writenBigWinTicketsOvertimeV2Trades.includes(overtimeMarketTrade.id)) || (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id))) {
+    if (  (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id))) {
       try {
         if (
             !overtimeMarketTrade ||
