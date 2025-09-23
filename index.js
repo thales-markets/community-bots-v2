@@ -151,6 +151,7 @@ const MOLLY_CHANNEL_ID_BASE = "1414627646003740775";
 
 const userDukaIdForBigTrades = '340872297630138370';
 const userLukaIdForBigTrades = '696035982394523799';
+const userPedjaIdForBigTrades = '1419388259615768648';
 
 const ALL_CHANNEL_IDS = [
   CHANNEL_OPT_SMALL,
@@ -323,6 +324,7 @@ async function sendDirectMessageToUser(embed, additionalText) {
   try {
     const userDuka = await clientNewListings.users.fetch(userDukaIdForBigTrades);
     const userLuka = await clientNewListings.users.fetch(userLukaIdForBigTrades);
+    const userPedja = await clientNewListings.users.fetch(userPedjaIdForBigTrades);
 
     const dmEmbed = { ...embed, fields: [...embed.fields] };
 
@@ -335,6 +337,7 @@ async function sendDirectMessageToUser(embed, additionalText) {
 
     await userLuka.send({ embeds: [dmEmbed] });
     await userDuka.send({ embeds: [dmEmbed] });
+    await userPedja.send({ embeds: [dmEmbed] });
     console.log(`✅ Embed DM sent to ${userDuka.tag}`);
   } catch (error) {
     console.error(`❌ Could not send DM to user ID:`, error);
