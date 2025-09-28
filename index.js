@@ -314,6 +314,9 @@ function roundTo2Decimals(number){
   else return number.toFixed(2);
 }
 
+let WINNER_HALF = new Array;
+WINNER_HALF.push(10051,
+    10052);
 let WINNER = new Array;
 WINNER.push(0, 10011, 10012,
     1001,
@@ -340,6 +343,8 @@ WINNER.push(0, 10011, 10012,
     10130
 );
 
+let HANDICAP_HALF = new Array;
+HANDICAP_HALF.push(10071,10072);
 let HANDICAP = new Array;
 HANDICAP.push(10001,
     10013,
@@ -382,6 +387,10 @@ TOTAL_AWAY_SECOND.push(10212,10018,10112,10312,10412,10512,10612,10712,10812)
 
     let TOTAL_AWAY_FIRST = new Array;
 TOTAL_AWAY_FIRST.push(10112)
+
+
+let TOTAL_HALF = new Array;
+TOTAL_HALF.push(10062,10061);
 
 let TOTAL = new Array;
 TOTAL.push(10002,
@@ -608,6 +617,9 @@ async function getV2MessageContent(overtimeMarketTrade,typeMap) {
   }
 
   let marketId = typeMap.get(overtimeMarketTrade.marketsData[0].typeId).id;
+  if(WINNER_HALF.includes(marketId) || TOTAL_HALF.includes(marketId) || HANDICAP_HALF.includes(marketId)){
+    marketType = marketType + " half";
+  }
   let betMessage;
   if (WINNER.includes(marketId)) {
     if (position == 0)
@@ -840,6 +852,9 @@ async function getV2ParlayMessage(overtimeMarketTrade, parlayMessage,typeMap) {
     let homeTeam;
     let awayTeam;
     let marketId = typeMap.get(marketsData.typeId).id;
+    if(WINNER_HALF.includes(marketId) || TOTAL_HALF.includes(marketId) || HANDICAP_HALF.includes(marketId)){
+      marketType = marketType + " half";
+    }
     if (marketsData.playerId && marketsData.playerId > 0) {
       let specificPlayer = await axios.get('https://api.overtime.io/overtime-v2/players-info/' + marketsData.playerId);
       specificPlayer = specificPlayer.data.playerName;
