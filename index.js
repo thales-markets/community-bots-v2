@@ -36,6 +36,8 @@ const web3OP   = new Web3(new Web3.providers.HttpProvider(process.env.DRPC_OP_UR
 const web3ARB  = new Web3(new Web3.providers.HttpProvider(process.env.DRPC_ARB_URL,  { timeout: 30000 }));
 const web3BASE = new Web3(new Web3.providers.HttpProvider(process.env.DRPC_BASE_URL, { timeout: 30000 }));
 
+
+
 const path = require('path');
 const puppeteer = require('puppeteer');
 const cron = require('node-cron');
@@ -47,7 +49,8 @@ const tz = 'Etc/GMT-1';
 const DISCORD_ANNOUNCEMENTS = '906495542744469544';
 const DISCORD_MONEY_TIPS     = '1407664919033413705';
 
-
+let sportsV2Raw = fs.readFileSync('contracts/sportsAMMV2.json');
+let sportsV2Parse = JSON.parse(sportsV2Raw);
 
 let arbitrumRaw = fs.readFileSync('contracts/arbitrum.json');
 let arbitrumContract = JSON.parse(arbitrumRaw);
@@ -2838,4 +2841,108 @@ async function cleanUpDuplicateMessages() {
       console.error(`❌ Error cleaning up messages in channel ${channelId}:`, err);
     }
   }
+}
+
+function toChecksummed(address) {
+  return Web3.utils.toChecksumAddress(String(address).trim());
+}
+
+// Good addresses (choose one style and stick to it)
+const OP_CORE_ADDR   = toChecksummed("0x2367FB44C4C2c4E5aAC62d78A55876E01F251605");
+const ARB_CORE_ADDR  = toChecksummed("0xfb642d4f75F7BAF1cD7eB081Fdfb645D6e2F2395"); // was failing
+const BASE_CORE_ADDR = toChecksummed("0xA2dCFEe657Bc0a71AC31d146366246202eae18a4");
+
+
+startOPNewTicketListener();
+startARBNewTicketListener();
+startBASENewTicketListener();
+
+
+
+
+async function fetchTicket(contractTicket, id) {
+  const arr = await contractTicket.methods.getTicketsData([id]).call();
+  return arr?.[0];
+}
+
+function makeWs(websocketUrl) {
+  return new Web3(new Web3.providers.WebsocketProvider(websocketUrl, {
+    clientConfig: { keepalive: true, keepaliveInterval: 30000 },
+    reconnect: { auto: true, delay: 3000, maxAttempts: Infinity, onTimeout: true },
+  }));
+}
+
+function startOPNewTicketListener() {
+  const web3OPws = makeWs(process.env.OP_WSS_URL);
+  const coreWS   = new web3OPws.eth.Contract(sportsV2Parse, OP_CORE_ADDR);
+
+  console.log("[OP] Subscribing to NewTicket…");
+  coreWS.events.NewTicket({ fromBlock: "latest" })
+      .on("data", async (ev) => {
+        try {
+          const id = ev.address;
+          if (!id || writenOvertimeV2Trades.includes(id)) return;
+          console.log("[OP] NewTicket event for ticket:", id);
+          const t = await fetchTicket(v2TicketContract, id); // reuse your existing OP ticket contract (HTTP)
+          if (!t) return;
+
+          const typeMap = new Map(Object.entries(JSON.parse(JSON.stringify(typeInfoMap || {}))));
+          await printV2OPMessage(t, typeMap);
+
+        } catch (err) {
+          console.error("[OP] NewTicket handler error:", err?.message || err);
+        }
+      })
+      .on("changed", (ev) => console.log("[OP] NewTicket changed (reorg):", ev?.transactionHash))
+      .on("error",   (err) => console.error("[OP] Subscription error:", err?.message || err));
+}
+
+function startARBNewTicketListener() {
+  const web3ARBws = makeWs(process.env.WSS_ARB_URL);
+  const coreWS    = new web3ARBws.eth.Contract(sportsV2Parse, ARB_CORE_ADDR);
+
+  console.log("[ARB] Subscribing to NewTicket…");
+  coreWS.events.NewTicket({ fromBlock: "latest" })
+      .on("data", async (ev) => {
+        try {
+          const id = ev.address;
+          if (!id || writenOvertimeV2ARBTrades.includes(id)) return;
+          console.log("[ARB] NewTicket event for ticket:", id);
+          const t = await fetchTicket(v2ARBTicketContract, id); // reuse your ARB ticket contract (HTTP)
+          if (!t) return;
+
+          const typeMap = new Map(Object.entries(JSON.parse(JSON.stringify(typeInfoMap || {}))));
+          await printV2ARBMessage(t, typeMap);
+        } catch (err) {
+          console.error("[ARB] NewTicket handler error:", err?.message || err);
+        }
+      })
+      .on("changed", (ev) => console.log("[ARB] NewTicket changed (reorg):", ev?.transactionHash))
+      .on("error",   (err) => console.error("[ARB] Subscription error:", err?.message || err));
+}
+
+// --- BASE listener (calls printV2BaseMessage) ---
+function startBASENewTicketListener() {
+  const web3BASEws = makeWs(process.env.WSS_BASE_URL);
+  const coreWS     = new web3BASEws.eth.Contract(sportsV2Parse, BASE_CORE_ADDR);
+
+  console.log("[BASE] Subscribing to NewTicket…");
+  coreWS.events.NewTicket({ fromBlock: "latest" })
+      .on("data", async (ev) => {
+        try {
+          const id = ev.address;
+          if (!id || writenOvertimeV2BASETrades.includes(id)) return;
+          console.log("[BASE] NewTicket event for ticket:", id);
+          const t = await fetchTicket(v2BASETicketContract, id); // reuse your BASE ticket contract (HTTP)
+          if (!t) return;
+
+          const typeMap = new Map(Object.entries(JSON.parse(JSON.stringify(typeInfoMap || {}))));
+          await printV2BaseMessage(t, typeMap);
+
+        } catch (err) {
+          console.error("[BASE] NewTicket handler error:", err?.message || err);
+        }
+      })
+      .on("changed", (ev) => console.log("[BASE] NewTicket changed (reorg):", ev?.transactionHash))
+      .on("error",   (err) => console.error("[BASE] Subscription error:", err?.message || err));
 }
