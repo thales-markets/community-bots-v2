@@ -2846,11 +2846,9 @@ async function cleanUpDuplicateMessages() {
 function toChecksummed(address) {
   return Web3.utils.toChecksumAddress(String(address).trim());
 }
-
-// Good addresses (choose one style and stick to it)
-const OP_CORE_ADDR   = toChecksummed("0x2367FB44C4C2c4E5aAC62d78A55876E01F251605");
-const ARB_CORE_ADDR  = toChecksummed("0xfb642d4f75F7BAF1cD7eB081Fdfb645D6e2F2395"); // was failing
-const BASE_CORE_ADDR = toChecksummed("0xA2dCFEe657Bc0a71AC31d146366246202eae18a4");
+const OP_CORE_ADDR   = toChecksummed("0xFb4e4811C7A811E098A556bD79B64c20b479E431");
+const ARB_CORE_ADDR  = toChecksummed("0xfb64E79A562F7250131cf528242CEB10fDC82395");
+const BASE_CORE_ADDR = toChecksummed("0x76923cDDE21928ddbeC4B8BFDC8143BB6d0841a8");
 
 
 startOPNewTicketListener();
@@ -2880,9 +2878,9 @@ function startOPNewTicketListener() {
   coreWS.events.NewTicket({ fromBlock: "latest" })
       .on("data", async (ev) => {
         try {
+          console.log("[OP] NewTicket event for ticket:", id);
           const id = ev.address;
           if (!id || writenOvertimeV2Trades.includes(id)) return;
-          console.log("[OP] NewTicket event for ticket:", id);
           const t = await fetchTicket(v2TicketContract, id); // reuse your existing OP ticket contract (HTTP)
           if (!t) return;
 
