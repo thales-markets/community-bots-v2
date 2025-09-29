@@ -2878,9 +2878,10 @@ function startOPNewTicketListener() {
   coreWS.events.NewTicket({ fromBlock: "latest" })
       .on("data", async (ev) => {
         try {
+          const id = ev.returnValues.ticket;
           console.log("[OP] NewTicket event for ticket:", id);
-          const id = ev.address;
           if (!id || writenOvertimeV2Trades.includes(id)) return;
+          console.log("[OP] NewTicket event Not duplicated for ticket:", id);
           const t = await fetchTicket(v2TicketContract, id); // reuse your existing OP ticket contract (HTTP)
           if (!t) return;
 
@@ -2903,7 +2904,7 @@ function startARBNewTicketListener() {
   coreWS.events.NewTicket({ fromBlock: "latest" })
       .on("data", async (ev) => {
         try {
-          const id = ev.address;
+          const id = ev.returnValues.ticket;
           if (!id || writenOvertimeV2ARBTrades.includes(id)) return;
           console.log("[ARB] NewTicket event for ticket:", id);
           const t = await fetchTicket(v2ARBTicketContract, id); // reuse your ARB ticket contract (HTTP)
@@ -2928,7 +2929,7 @@ function startBASENewTicketListener() {
   coreWS.events.NewTicket({ fromBlock: "latest" })
       .on("data", async (ev) => {
         try {
-          const id = ev.address;
+          const id = ev.returnValues.ticket;
           if (!id || writenOvertimeV2BASETrades.includes(id)) return;
           console.log("[BASE] NewTicket event for ticket:", id);
           const t = await fetchTicket(v2BASETicketContract, id); // reuse your BASE ticket contract (HTTP)
