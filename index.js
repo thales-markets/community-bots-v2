@@ -55,8 +55,93 @@ let sportsV2Parse = JSON.parse(sportsV2Raw);
 let arbitrumRaw = fs.readFileSync('contracts/arbitrum.json');
 let arbitrumContract = JSON.parse(arbitrumRaw);
 const web3 = new Web3(new Web3.providers.HttpProvider(process.env.INFURA_URL));
-const CoinGecko = require('coingecko-api');
-const CoinGeckoClient = new CoinGecko();
+// Token mapping for Binance and CoinPaprika APIs (adapted from aelin-bots/community-winner)
+const tokenMapping = {
+  'overtime': { binance: null, coinpaprika: 'over-overtime' },
+  'ethereum': { binance: 'ETH', coinpaprika: 'eth-ethereum' },
+  'bitcoin': { binance: 'BTC', coinpaprika: 'btc-bitcoin' }
+};
+
+// Fetch price from Binance API
+async function getPriceFromBinance(symbol) {
+  try {
+    const tradingPair = `${symbol}USDT`;
+    const response = await axios.get(
+      `https://api.binance.com/api/v3/ticker/24hr?symbol=${tradingPair}`,
+      {
+        headers: {
+          'User-Agent': 'V2-OT-Bots/1.0'
+        }
+      }
+    );
+
+    const data = response.data;
+    return {
+      success: true,
+      price: parseFloat(data.lastPrice),
+      priceChange24h: parseFloat(data.priceChangePercent)
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.msg || error.message
+    };
+  }
+}
+
+// Fetch price from CoinPaprika API
+async function getPriceFromCoinPaprika(coinId) {
+  try {
+    const response = await axios.get(
+      `https://api.coinpaprika.com/v1/tickers/${coinId}`,
+      {
+        headers: {
+          'User-Agent': 'V2-OT-Bots/1.0'
+        }
+      }
+    );
+
+    const data = response.data;
+    return {
+      success: true,
+      price: data.quotes.USD.price,
+      priceChange24h: data.quotes.USD.percent_change_24h,
+      circulating_supply: data.circulating_supply,
+      market_cap: data.quotes.USD.market_cap
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message
+    };
+  }
+}
+
+// Get price with automatic fallback (Binance first, then CoinPaprika)
+async function getTokenPrice(tokenForPrice) {
+  const mapping = tokenMapping[tokenForPrice];
+  if (!mapping) {
+    return { success: false, error: `Unknown token: ${tokenForPrice}` };
+  }
+
+  // Try Binance first (better rate limits)
+  if (mapping.binance) {
+    const binanceResult = await getPriceFromBinance(mapping.binance);
+    if (binanceResult.success) {
+      return binanceResult;
+    }
+  }
+
+  // Fallback to CoinPaprika
+  if (mapping.coinpaprika) {
+    const paprikaResult = await getPriceFromCoinPaprika(mapping.coinpaprika);
+    if (paprikaResult.success) {
+      return paprikaResult;
+    }
+  }
+
+  return { success: false, error: 'Failed to fetch from all sources' };
+}
 const oddslib = require('oddslib');
 
 
@@ -71,7 +156,10 @@ let overtimeV2ARBTradesKey = "overtimeV2ARBTradesKey";
 let overtimeV2BASETradesKey = "overtimeV2BASETradesKey";
 let FREE_BET_OP = "0x8D18e68563d53be97c2ED791CA4354911F16A54B";
 let STAKING_OP = "0x5e6D44B17bc989652920197790eF626b8a84e219";
-let MOLLY_BETS ="0x1cA826587Ee86E44F2D8517E0F1A376F6dABC9c0";
+const MOLLY_BETS = [
+  "0x1cA826587Ee86E44F2D8517E0F1A376F6dABC9c0",
+  "0x644b380D11AB50DcE6f6aD6F1a03a94E7D2b2B57"
+];
 
 let FREE_BET_BASE = "0x2929Cf1edAc2DB91F68e2822CEc25736cAe029bf";
 let STAKING_BASE = "0x84aB38e42D8Da33b480762cCa543eEcA6135E040";
@@ -128,7 +216,9 @@ const CHANNEL_BASE_BIG_PAYOUT = "1334191185694294076";
 
 const MOLLY_CHANNEL_ID_ARB = "1414626884934828102";
 const MOLLY_CHANNEL_ID_OP = "1414626846246568007";
+const MOLLY_CHANNEL_ID_OP_LIVE = "1427661011615219796";
 const MOLLY_CHANNEL_ID_BASE = "1414627646003740775";
+const CHANNEL_PARLAY_LIVE = "1466034069862355157";
 
 const userDukaIdForBigTrades = '340872297630138370';
 const userLukaIdForBigTrades = '696035982394523799';
@@ -609,6 +699,9 @@ async function getV2MessageContent(overtimeMarketTrade,typeMap) {
   if (overtimeMarketTrade.marketsData[0].playerId && overtimeMarketTrade.marketsData[0].playerId > 0) {
     let specificPlayer = await axios.get('https://api.overtime.io/overtime-v2/players-info/' + overtimeMarketTrade.marketsData[0].playerId);
     specificPlayer = specificPlayer.data.playerName;
+    if (homeTeam && awayTeam) {
+        marketMessage = specificPlayer + " (" + homeTeam + " - " + awayTeam + ")";
+    }
     marketMessage = specificPlayer;
   } else {
     marketMessage = homeTeam + " - " + awayTeam;
@@ -860,7 +953,19 @@ async function getV2ParlayMessage(overtimeMarketTrade, parlayMessage,typeMap) {
     }
     if (marketsData.playerId && marketsData.playerId > 0) {
       let specificPlayer = await axios.get('https://api.overtime.io/overtime-v2/players-info/' + marketsData.playerId);
+      if (specificGame.teams && specificGame.teams.length >= 2) {
+        if (specificGame.teams[0].isHome) {
+          homeTeam = specificGame.teams[0].name;
+          awayTeam = specificGame.teams[1].name;
+        } else {
+          awayTeam = specificGame.teams[0].name;
+          homeTeam = specificGame.teams[1].name;
+        }
+      }
       specificPlayer = specificPlayer.data.playerName;
+      if(homeTeam && awayTeam){
+      specificPlayer = specificPlayer + " (" + homeTeam + " - " + awayTeam + ")";
+      }
       let betMessage = "";
       if (TOTAL.includes(marketId)) {
         if (position == 0)
@@ -1152,9 +1257,16 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
     }
 
     let mollyChannel;
-    if (MOLLY_BETS.toLowerCase() == overtimeMarketTrade.ticketOwner.toLowerCase()) {
+    if (MOLLY_BETS.some(address =>
+  address.toLowerCase() === overtimeMarketTrade.ticketOwner.toLowerCase()
+)) {
+      if(overtimeMarketTrade.isLive) {
+        mollyChannel = await clientNewListings.channels
+            .fetch(MOLLY_CHANNEL_ID_OP_LIVE);
+      } else {
       mollyChannel = await clientNewListings.channels
           .fetch(MOLLY_CHANNEL_ID_OP);
+      }
       console.log("##### Molly bet detected for ticket " + overtimeMarketTrade.id);
     }
 
@@ -1583,6 +1695,10 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
       }
 
       await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel);
+      if (overtimeMarketTrade.isLive && overtimeMarketTrade.marketsData.length > 1) {
+        const parlayLiveChannel = await clientNewListings.channels.fetch(CHANNEL_PARLAY_LIVE);
+        await sendMessageIfNotDuplicate(parlayLiveChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel);
+      }
       console.log("#@#@#@Sending V2 message: " + JSON.stringify(embed));
       writenOvertimeV2Trades.push(overtimeMarketTrade.id);
       redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
@@ -1673,21 +1789,76 @@ async function updateCirculatingAndMarketCap() {
 
 
 async function updateTokenPrice() {
+  try {
+    // Fetch overtime price and supply data
+    const overtimeData = await getTokenPrice("overtime");
+    if (overtimeData.success) {
+      thalesPrice = overtimeData.price;
+      circulatingSupplyOver = overtimeData.circulating_supply || circulatingSupplyOver;
+      marketCapOver = overtimeData.market_cap || marketCapOver;
+      console.log(`✅ Updated OVER: $${thalesPrice}, Circulating: ${circulatingSupplyOver}, Market Cap: $${marketCapOver}`);
+    } else {
+      console.log(`❌ Failed to fetch OVER price: ${overtimeData.error}`);
+      // Fallback to CoinGecko for overtime if needed
+      try {
+        const CoinGecko = require('coingecko-api');
+        const CoinGeckoClient = new CoinGecko();
+        let dataThales = await CoinGeckoClient.coins.fetch("overtime");
+        if(dataThales.data && dataThales.data.market_data) {
+          thalesPrice = dataThales.data.market_data.current_price.usd;
+          circulatingSupplyOver = dataThales.data.market_data.circulating_supply;
+          marketCapOver = dataThales.data.market_data.market_cap.usd;
+          console.log(`✅ Fallback: Updated OVER via CoinGecko: $${thalesPrice}`);
+        }
+      } catch (e) {
+        console.log(`❌ CoinGecko fallback also failed: ${e.message}`);
+      }
+    }
 
-  let dataThales = await CoinGeckoClient.coins.fetch("overtime");
-  if(dataThales.data && dataThales.data.market_data) {
-    thalesPrice =   dataThales.data.market_data.current_price.usd;
-    circulatingSupplyOver = dataThales.data.market_data.circulating_supply;
-    marketCapOver = dataThales.data.market_data.market_cap.usd;
-  }
+    // Fetch Ethereum price
+    const ethData = await getTokenPrice("ethereum");
+    if (ethData.success) {
+      ethPrice = ethData.price;
+      console.log(`✅ Updated ETH: $${ethPrice}`);
+    } else {
+      console.log(`❌ Failed to fetch ETH price: ${ethData.error}`);
+      // Fallback to CoinGecko
+      try {
+        const CoinGecko = require('coingecko-api');
+        const CoinGeckoClient = new CoinGecko();
+        let dataETH = await CoinGeckoClient.coins.fetch("ethereum");
+        if(dataETH.data && dataETH.data.market_data) {
+          ethPrice = dataETH.data.market_data.current_price.usd;
+          console.log(`✅ Fallback: Updated ETH via CoinGecko: $${ethPrice}`);
+        }
+      } catch (e) {
+        console.log(`❌ CoinGecko fallback also failed: ${e.message}`);
+      }
+    }
 
-  let dataETH = await CoinGeckoClient.coins.fetch("ethereum");
-  if(dataETH.data && dataETH.data.market_data) {
-    ethPrice =   dataETH.data.market_data.current_price.usd;
-  }
-  let dataBTC = await CoinGeckoClient.coins.fetch("bitcoin");
-  if(dataBTC.data && dataBTC.data.market_data) {
-    bitcoinPrice  =  dataBTC.data.market_data.current_price.usd;
+    // Fetch Bitcoin price
+    const btcData = await getTokenPrice("bitcoin");
+    if (btcData.success) {
+      bitcoinPrice = btcData.price;
+      console.log(`✅ Updated BTC: $${bitcoinPrice}`);
+    } else {
+      console.log(`❌ Failed to fetch BTC price: ${btcData.error}`);
+      // Fallback to CoinGecko
+      try {
+        const CoinGecko = require('coingecko-api');
+        const CoinGeckoClient = new CoinGecko();
+        let dataBTC = await CoinGeckoClient.coins.fetch("bitcoin");
+        if(dataBTC.data && dataBTC.data.market_data) {
+          bitcoinPrice = dataBTC.data.market_data.current_price.usd;
+          console.log(`✅ Fallback: Updated BTC via CoinGecko: $${bitcoinPrice}`);
+        }
+      } catch (e) {
+        console.log(`❌ CoinGecko fallback also failed: ${e.message}`);
+      }
+    }
+
+  } catch (error) {
+    console.error('❌ Error in updateTokenPrice:', error.message);
   }
 }
 
@@ -1777,7 +1948,9 @@ async function printV2ARBMessage(overtimeMarketTrade, typeMap) {
     }
 
     let mollyChannel;
-    if (MOLLY_BETS.toLowerCase() == overtimeMarketTrade.ticketOwner.toLowerCase()) {
+    if (MOLLY_BETS.some(address =>
+  address.toLowerCase() === overtimeMarketTrade.ticketOwner.toLowerCase()
+)) {
       mollyChannel = await clientNewListings.channels
           .fetch(MOLLY_CHANNEL_ID_ARB);
       console.log("##### Molly bet detected for ticket " + overtimeMarketTrade.id);
@@ -2228,6 +2401,10 @@ async function printV2ARBMessage(overtimeMarketTrade, typeMap) {
         }
 
         await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel)
+        if (overtimeMarketTrade.isLive && overtimeMarketTrade.marketsData.length > 1) {
+          const parlayLiveChannel = await clientNewListings.channels.fetch(CHANNEL_PARLAY_LIVE);
+          await sendMessageIfNotDuplicate(parlayLiveChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel);
+        }
         console.log("#@#@#@Sending arb message: " + JSON.stringify(embed));
       }
     }
@@ -2319,7 +2496,9 @@ async function printV2BaseMessage(overtimeMarketTrade, typeMap) {
     }
 
     let mollyChannel;
-    if (MOLLY_BETS.toLowerCase() == overtimeMarketTrade.ticketOwner.toLowerCase()) {
+    if (MOLLY_BETS.some(address =>
+  address.toLowerCase() === overtimeMarketTrade.ticketOwner.toLowerCase()
+)) {
       mollyChannel = await clientNewListings.channels
           .fetch(MOLLY_CHANNEL_ID_BASE);
       console.log("##### Molly bet detected for ticket " + overtimeMarketTrade.id);
@@ -2766,6 +2945,10 @@ async function printV2BaseMessage(overtimeMarketTrade, typeMap) {
         }
 
         await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel)
+        if (overtimeMarketTrade.isLive && overtimeMarketTrade.marketsData.length > 1) {
+          const parlayLiveChannel = await clientNewListings.channels.fetch(CHANNEL_PARLAY_LIVE);
+          await sendMessageIfNotDuplicate(parlayLiveChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel);
+        }
         console.log("#@#@#@Sending base message: " + JSON.stringify(embed));
       }
     }
