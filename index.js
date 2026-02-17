@@ -102,11 +102,18 @@ async function getPriceFromCoinPaprika(coinId) {
     );
 
     const data = response.data;
+    
+    // Calculate circulating supply from market cap and price if not provided
+    let circulating_supply = data.circulating_supply;
+    if (!circulating_supply && data.quotes?.USD?.market_cap && data.quotes?.USD?.price) {
+      circulating_supply = data.quotes.USD.market_cap / data.quotes.USD.price;
+    }
+    
     return {
       success: true,
       price: data.quotes.USD.price,
       priceChange24h: data.quotes.USD.percent_change_24h,
-      circulating_supply: data.circulating_supply,
+      circulating_supply: circulating_supply,
       market_cap: data.quotes.USD.market_cap
     };
   } catch (error) {
@@ -678,6 +685,27 @@ function  isTenisV2(sportId) {
     return true;
   } else {
     return false;
+  }
+}
+
+// Fetch Molly bet data from API
+async function fetchMollyBetData(ticketId) {
+  try {
+    const response = await axios.get(
+      `https://api.overtime.io/overtime-v2/molly/ticket-ids-map?ticketId=${ticketId}`,
+      {
+        headers: {
+          'User-Agent': 'V2-OT-Bots/1.0'
+        }
+      }
+    );
+    if (response.data && response.data.success && response.data.data && response.data.data.length > 0) {
+      return response.data.data[0];
+    }
+    return null;
+  } catch (error) {
+    console.error(`Error fetching Molly bet data for ticket ${ticketId}:`, error.message);
+    return null;
   }
 }
 
@@ -1257,6 +1285,7 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
     }
 
     let mollyChannel;
+    let mollyBetData = null;
     if (MOLLY_BETS.some(address =>
   address.toLowerCase() === overtimeMarketTrade.ticketOwner.toLowerCase()
 )) {
@@ -1268,6 +1297,8 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
           .fetch(MOLLY_CHANNEL_ID_OP);
       }
       console.log("##### Molly bet detected for ticket " + overtimeMarketTrade.id);
+      mollyBetData = await fetchMollyBetData(overtimeMarketTrade.id);
+      console.log("##### Molly bet data fetched:", mollyBetData);
     }
 
     let isSystem = overtimeMarketTrade.isSystem;
@@ -1295,6 +1326,11 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
     let odds = oddslib.from('impliedProbability', overtimeMarketTrade.totalQuote / 1e18).decimalValue.toFixed(3);
     let amountInCurrency = formatV2Amount(overtimeMarketTrade.buyInAmount, overtimeMarketTrade.collateral)
     let payoutInCurrency = multiplier * roundTo2Decimals(buyIn * odds);
+    let mollyPayoutInCurrency = null;
+    if (mollyBetData && mollyBetData.price) {
+      const mollyOdds = parseFloat(mollyBetData.price);
+      mollyPayoutInCurrency = multiplier * roundTo2Decimals(buyIn * mollyOdds);
+    }
     let buyInAmountUSD = "";
     let payoutInUSD = "";
     if (multiplier !== 1) {
@@ -1464,6 +1500,22 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
           ],
         };
       }
+      
+      // Add mollyQuote field right after Odds field if it's a molly bet
+      if (mollyBetData && mollyBetData.price) {
+        const oddsIndex = embed.fields.findIndex(f => f.name === ":coin: Odds:");
+        if (oddsIndex !== -1) {
+          const mollyOdds = parseFloat(mollyBetData.price).toFixed(3);
+          const mollyPayoutText = mollyPayoutInCurrency !== null 
+            ? ` (${roundTo2Decimals(mollyPayoutInCurrency)} $)`
+            : "";
+          embed.fields.splice(oddsIndex + 1, 0, {
+            name: ":coin: Molly Quote:",
+            value: mollyOdds + mollyPayoutText,
+          });
+        }
+      }
+      
       let overtimeTradesChannel;
       let additionalText;
       if (Number(multiplier * amountInCurrency) < 500) {
@@ -1502,6 +1554,15 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
             {
               name: ":coin: Smart ticket owner:",
               value: smartTicketOwner,
+            }
+        );
+      }
+
+      if (mollyBetData && mollyBetData.customerId) {
+        embed.fields.push(
+            {
+              name: ":coin: Customer ID:",
+              value: mollyBetData.customerId,
             }
         );
       }
@@ -1652,6 +1713,22 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
           ],
         };
       }
+      
+      // Add mollyQuote field right after Total Quote field if it's a molly bet
+      if (mollyBetData && mollyBetData.price) {
+        const totalQuoteIndex = embed.fields.findIndex(f => f.name === ":coin: Total Quote:");
+        if (totalQuoteIndex !== -1) {
+          const mollyOdds = parseFloat(mollyBetData.price).toFixed(3);
+          const mollyPayoutText = mollyPayoutInCurrency !== null 
+            ? ` (${roundTo2Decimals(mollyPayoutInCurrency)} $)`
+            : "";
+          embed.fields.splice(totalQuoteIndex + 1, 0, {
+            name: ":coin: Molly Quote:",
+            value: mollyOdds + mollyPayoutText,
+          });
+        }
+      }
+      
       let overtimeTradesChannel;
       let additionalText;
       if (Number(multiplier * amountInCurrency) < 500) {
@@ -1690,6 +1767,15 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
             {
               name: ":coin: Smart ticket owner:",
               value: smartTicketOwner,
+            }
+        );
+      }
+
+      if (mollyBetData && mollyBetData.customerId) {
+        embed.fields.push(
+            {
+              name: ":coin: Customer ID:",
+              value: mollyBetData.customerId,
             }
         );
       }
@@ -1773,6 +1859,27 @@ function getNumberLabelDecimalsMil(labelValue) {
 
 async function updateCirculatingAndMarketCap() {
   console.log("Updating circulating: " + clientOVERCirculating + " and Thales price: " + thalesPrice);
+
+  // Fetch circulating supply from CoinGecko REST API to ensure we use the correct value
+  try {
+    const response = await axios.get(
+      'https://api.coingecko.com/api/v3/coins/overtime',
+      {
+        headers: {
+          'User-Agent': 'V2-OT-Bots/1.0',
+          'Accept': 'application/json'
+        }
+      }
+    );
+    
+    if(response.data && response.data.market_data) {
+      circulatingSupplyOver = response.data.market_data.circulating_supply;
+      marketCapOver = response.data.market_data.market_cap?.usd;
+      console.log(`✅ Fetched OVER from CoinGecko: Circulating: ${circulatingSupplyOver}, Market Cap: $${marketCapOver}`);
+    }
+  } catch (e) {
+    console.log(`❌ Failed to fetch OVER from CoinGecko: ${e.message}`);
+  }
 
   if(circulatingSupplyOver && marketCapOver && clientOVERCirculating && clientOVERCirculating.user) {
   for (const [guildId, guild] of clientOVERCirculating.guilds.cache) {
@@ -1948,12 +2055,15 @@ async function printV2ARBMessage(overtimeMarketTrade, typeMap) {
     }
 
     let mollyChannel;
+    let mollyBetData = null;
     if (MOLLY_BETS.some(address =>
   address.toLowerCase() === overtimeMarketTrade.ticketOwner.toLowerCase()
 )) {
       mollyChannel = await clientNewListings.channels
           .fetch(MOLLY_CHANNEL_ID_ARB);
       console.log("##### Molly bet detected for ticket " + overtimeMarketTrade.id);
+      mollyBetData = await fetchMollyBetData(overtimeMarketTrade.id);
+      console.log("##### Molly bet data fetched:", mollyBetData);
     }
 
     let isSystem = overtimeMarketTrade.isSystem;
@@ -1996,6 +2106,11 @@ async function printV2ARBMessage(overtimeMarketTrade, typeMap) {
     let odds = oddslib.from('impliedProbability', overtimeMarketTrade.totalQuote / 1e18).decimalValue.toFixed(3);
     let amountInCurrency = formatV2ARBAmount(overtimeMarketTrade.buyInAmount, overtimeMarketTrade.collateral);
     let payoutInCurrency = multiplier * roundTo2Decimals(buyIn * odds);
+    let mollyPayoutInCurrency = null;
+    if (mollyBetData && mollyBetData.price) {
+      const mollyOdds = parseFloat(mollyBetData.price);
+      mollyPayoutInCurrency = multiplier * roundTo2Decimals(buyIn * mollyOdds);
+    }
     let buyInAmountUSD = "";
     let payoutInUSD = "";
     if (multiplier !== 1) {
@@ -2163,6 +2278,21 @@ async function printV2ARBMessage(overtimeMarketTrade, typeMap) {
         };
 
       }
+      
+      // Add mollyQuote field right after Odds field if it's a molly bet
+      if (mollyBetData && mollyBetData.price) {
+        const oddsIndex = embed.fields.findIndex(f => f.name === ":coin: Odds:");
+        if (oddsIndex !== -1) {
+          const mollyOdds = parseFloat(mollyBetData.price).toFixed(3);
+          const mollyPayoutText = mollyPayoutInCurrency !== null 
+            ? ` (${roundTo2Decimals(mollyPayoutInCurrency)} $)`
+            : "";
+          embed.fields.splice(oddsIndex + 1, 0, {
+            name: ":coin: Molly Quote:",
+            value: mollyOdds + mollyPayoutText,
+          });
+        }
+      }
 
       let overtimeTradesChannel;
       let additionalText;
@@ -2206,6 +2336,15 @@ async function printV2ARBMessage(overtimeMarketTrade, typeMap) {
               {
                 name: ":coin: Smart ticket owner:",
                 value: smartTicketOwner,
+              }
+          );
+        }
+
+        if (mollyBetData && mollyBetData.customerId) {
+          embed.fields.push(
+              {
+                name: ":coin: Customer ID:",
+                value: mollyBetData.customerId,
               }
           );
         }
@@ -2353,6 +2492,22 @@ async function printV2ARBMessage(overtimeMarketTrade, typeMap) {
           ],
         };
       }
+      
+      // Add mollyQuote field right after Total Quote field if it's a molly bet
+      if (mollyBetData && mollyBetData.price) {
+        const totalQuoteIndex = embed.fields.findIndex(f => f.name === ":coin: Total Quote:");
+        if (totalQuoteIndex !== -1) {
+          const mollyOdds = parseFloat(mollyBetData.price).toFixed(3);
+          const mollyPayoutText = mollyPayoutInCurrency !== null 
+            ? ` (${roundTo2Decimals(mollyPayoutInCurrency)} $)`
+            : "";
+          embed.fields.splice(totalQuoteIndex + 1, 0, {
+            name: ":coin: Molly Quote:",
+            value: mollyOdds + mollyPayoutText,
+          });
+        }
+      }
+      
       let overtimeTradesChannel;
       let additionalText;
       if (Number(multiplier * amountInCurrency) < 500) {
@@ -2396,6 +2551,15 @@ async function printV2ARBMessage(overtimeMarketTrade, typeMap) {
               {
                 name: ":coin: Smart ticket owner:",
                 value: smartTicketOwner,
+              }
+          );
+        }
+
+        if (mollyBetData && mollyBetData.customerId) {
+          embed.fields.push(
+              {
+                name: ":coin: Customer ID:",
+                value: mollyBetData.customerId,
               }
           );
         }
@@ -2496,12 +2660,15 @@ async function printV2BaseMessage(overtimeMarketTrade, typeMap) {
     }
 
     let mollyChannel;
+    let mollyBetData = null;
     if (MOLLY_BETS.some(address =>
   address.toLowerCase() === overtimeMarketTrade.ticketOwner.toLowerCase()
 )) {
       mollyChannel = await clientNewListings.channels
           .fetch(MOLLY_CHANNEL_ID_BASE);
       console.log("##### Molly bet detected for ticket " + overtimeMarketTrade.id);
+      mollyBetData = await fetchMollyBetData(overtimeMarketTrade.id);
+      console.log("##### Molly bet data fetched:", mollyBetData);
     }
 
     let moneySymbol;
@@ -2536,6 +2703,11 @@ async function printV2BaseMessage(overtimeMarketTrade, typeMap) {
     let odds = oddslib.from('impliedProbability', overtimeMarketTrade.totalQuote / 1e18).decimalValue.toFixed(3);
     let amountInCurrency = formatV2BASEAmount(overtimeMarketTrade.buyInAmount, overtimeMarketTrade.collateral);
     let payoutInCurrency = multiplier * roundTo2Decimals(buyIn * odds);
+    let mollyPayoutInCurrency = null;
+    if (mollyBetData && mollyBetData.price) {
+      const mollyOdds = parseFloat(mollyBetData.price);
+      mollyPayoutInCurrency = multiplier * roundTo2Decimals(buyIn * mollyOdds);
+    }
     let buyInAmountUSD = "";
     let payoutInUSD = "";
     if (multiplier !== 1) {
@@ -2704,6 +2876,21 @@ async function printV2BaseMessage(overtimeMarketTrade, typeMap) {
         };
 
       }
+      
+      // Add mollyQuote field right after Odds field if it's a molly bet
+      if (mollyBetData && mollyBetData.price) {
+        const oddsIndex = embed.fields.findIndex(f => f.name === ":coin: Odds:");
+        if (oddsIndex !== -1) {
+          const mollyOdds = parseFloat(mollyBetData.price).toFixed(3);
+          const mollyPayoutText = mollyPayoutInCurrency !== null 
+            ? ` (${roundTo2Decimals(mollyPayoutInCurrency)} $)`
+            : "";
+          embed.fields.splice(oddsIndex + 1, 0, {
+            name: ":coin: Molly Quote:",
+            value: mollyOdds + mollyPayoutText,
+          });
+        }
+      }
 
       let overtimeTradesChannel;
       let additionalText;
@@ -2748,6 +2935,15 @@ async function printV2BaseMessage(overtimeMarketTrade, typeMap) {
               {
                 name: ":coin: Smart ticket owner:",
                 value: smartTicketOwner,
+              }
+          );
+        }
+
+        if (mollyBetData && mollyBetData.customerId) {
+          embed.fields.push(
+              {
+                name: ":coin: Customer ID:",
+                value: mollyBetData.customerId,
               }
           );
         }
@@ -2895,6 +3091,22 @@ async function printV2BaseMessage(overtimeMarketTrade, typeMap) {
           ],
         };
       }
+      
+      // Add mollyQuote field right after Total Quote field if it's a molly bet
+      if (mollyBetData && mollyBetData.price) {
+        const totalQuoteIndex = embed.fields.findIndex(f => f.name === ":coin: Total Quote:");
+        if (totalQuoteIndex !== -1) {
+          const mollyOdds = parseFloat(mollyBetData.price).toFixed(3);
+          const mollyPayoutText = mollyPayoutInCurrency !== null 
+            ? ` (${roundTo2Decimals(mollyPayoutInCurrency)} $)`
+            : "";
+          embed.fields.splice(totalQuoteIndex + 1, 0, {
+            name: ":coin: Molly Quote:",
+            value: mollyOdds + mollyPayoutText,
+          });
+        }
+      }
+      
       let overtimeTradesChannel;
       let additionalText;
       if (Number(multiplier * amountInCurrency) < 500) {
@@ -2940,6 +3152,15 @@ async function printV2BaseMessage(overtimeMarketTrade, typeMap) {
               {
                 name: ":coin: Smart ticket owner:",
                 value: smartTicketOwner,
+              }
+          );
+        }
+
+        if (mollyBetData && mollyBetData.customerId) {
+          embed.fields.push(
+              {
+                name: ":coin: Customer ID:",
+                value: mollyBetData.customerId,
               }
           );
         }
