@@ -54,7 +54,7 @@ let sportsV2Parse = JSON.parse(sportsV2Raw);
 
 let arbitrumRaw = fs.readFileSync('contracts/arbitrum.json');
 let arbitrumContract = JSON.parse(arbitrumRaw);
-const web3 = new Web3(new Web3.providers.HttpProvider(process.env.INFURA_URL));
+const web3 = new Web3(new Web3.providers.HttpProvider(process.env.DRPC_URL));
 // Token mapping for Binance and CoinPaprika APIs (adapted from aelin-bots/community-winner)
 const tokenMapping = {
   'overtime': { binance: null, coinpaprika: 'over-overtime' },
@@ -165,8 +165,13 @@ let FREE_BET_OP = "0x8D18e68563d53be97c2ED791CA4354911F16A54B";
 let STAKING_OP = "0x5e6D44B17bc989652920197790eF626b8a84e219";
 const MOLLY_BETS = [
   "0x1cA826587Ee86E44F2D8517E0F1A376F6dABC9c0",
-  "0x644b380D11AB50DcE6f6aD6F1a03a94E7D2b2B57"
+  "0x644b380D11AB50DcE6f6aD6F1a03a94E7D2b2B57",
+  "0x6C333869c5e65dC74D12B6Af506CeF62806FA311",
+  "0x05BCC6267fB15A48135cc8D967CD9adcae8d8680"
 ];
+const POLLY_BETS = [
+  "0x8a18bdf75BB66B39C68ECe1bB1925781c44B08fB"
+]
 
 let FREE_BET_BASE = "0x2929Cf1edAc2DB91F68e2822CEc25736cAe029bf";
 let STAKING_BASE = "0x84aB38e42D8Da33b480762cCa543eEcA6135E040";
@@ -194,12 +199,6 @@ let v2ARBTicketContract = new web3ARB.eth.Contract(v2ContractTicketRaw,"0x04386f
 let v2BASEContract = new web3BASE.eth.Contract(v2ContractRaw,"0xA2dCFEe657Bc0a71AC31d146366246202eae18a4");
 
 
-let contractESORaw = fs.readFileSync('contracts/eso.json');
-let esoContrat = JSON.parse(contractESORaw);
-let esoOPContract = new web3OP.eth.Contract(esoContrat,"0x0000001c5b32f37f5bea87bdd5374eb2ac54ea8e");
-let esoARBContract = new web3ARB.eth.Contract(esoContrat,"0x0000001c5b32f37f5bea87bdd5374eb2ac54ea8e");
-let esoBASEContract = new web3BASE.eth.Contract(esoContrat,"0x0000001c5b32f37f5bea87bdd5374eb2ac54ea8e");
-
 let v2BASETicketContract = new web3BASE.eth.Contract(v2ContractTicketRaw,"0x99D318b6402cE95B6B46F40f752eA96430A2Ead0");
 
 // Global Channel IDs
@@ -225,6 +224,7 @@ const MOLLY_CHANNEL_ID_ARB = "1414626884934828102";
 const MOLLY_CHANNEL_ID_OP = "1414626846246568007";
 const MOLLY_CHANNEL_ID_OP_LIVE = "1427661011615219796";
 const MOLLY_CHANNEL_ID_BASE = "1414627646003740775";
+const POLLY_CHANNEL_ID_OP = "1501186018051887214";
 const CHANNEL_PARLAY_LIVE = "1466034069862355157";
 
 const userDukaIdForBigTrades = '340872297630138370';
@@ -304,7 +304,30 @@ fetchTypeInfoMap();
 // Then call it every 5 minutes
 setInterval(fetchTypeInfoMap, 5 * 60 * 1000);
 
+const EOA_SMART_ACCOUNT_MAP_URL = 'https://overdrop.overtime.io/eoa-smart-account-map';
+let smartAccountToEoaMap = {};
 
+async function fetchEoaSmartAccountMap() {
+  try {
+    const response = await axios.get(EOA_SMART_ACCOUNT_MAP_URL);
+    const reverse = {};
+    for (const [eoa, smartAccount] of Object.entries(response.data)) {
+      reverse[String(smartAccount).toLowerCase()] = eoa;
+    }
+    smartAccountToEoaMap = reverse;
+    console.log(`Loaded EOA-smart-account map (${Object.keys(reverse).length} smart accounts)`);
+  } catch (error) {
+    console.error('Error fetching EOA-smart-account map:', error.message);
+  }
+}
+
+function getEoaForSmartTicketOwner(ticketOwner) {
+  if (!ticketOwner) return null;
+  return smartAccountToEoaMap[String(ticketOwner).toLowerCase()] || null;
+}
+
+fetchEoaSmartAccountMap();
+setInterval(fetchEoaSmartAccountMap, 60 * 60 * 1000);
 
 function  formatV2Amount(numberForFormating, collateralAddress) {
 
@@ -347,7 +370,7 @@ function  formatV2ARBAmount(numberForFormating, collateralAddress) {
 
 
 
-async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additionalText,mollyChannel) {
+async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additionalText,mollyChannel, pollyChannel) {
   const messages = await channel.messages.fetch({ limit: 100 });
 
   const duplicate = messages.find(msg => {
@@ -366,6 +389,9 @@ async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additional
   }
   if(mollyChannel){
   mollyChannel.send({ embeds: [embed] }).catch(console.error);
+  }
+  if(pollyChannel){
+  pollyChannel.send({ embeds: [embed] }).catch(console.error);
   }
 
   channel.send({ embeds: [embed] }).catch(console.error);
@@ -1268,12 +1294,7 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
       console.warn(`⚠️ Skipping trade ${overtimeMarketTrade?.id} — no marketsData`);
       return; // skip to the next trade
     }
-    const address = Web3.utils.toChecksumAddress(overtimeMarketTrade.ticketOwner);
-    let isSmart = await isSmartContract(web3OP, address);
-    let smartTicketOwner;
-    if (isSmart) {
-      smartTicketOwner = await getOwnerOfSmartAccount(esoOPContract, overtimeMarketTrade.ticketOwner);
-    }
+    let smartTicketOwner = getEoaForSmartTicketOwner(overtimeMarketTrade.ticketOwner);
 
     let ticketOwner;
     if (overtimeMarketTrade.ticketOwner == STAKING_OP) {
@@ -1299,6 +1320,12 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
       console.log("##### Molly bet detected for ticket " + overtimeMarketTrade.id);
       mollyBetData = await fetchMollyBetData(overtimeMarketTrade.id);
       console.log("##### Molly bet data fetched:", mollyBetData);
+    }
+
+    let pollyChannel;
+    if (POLLY_BETS.some(addr => addr.toLowerCase() === overtimeMarketTrade.ticketOwner.toLowerCase())) {
+      pollyChannel = await clientNewListings.channels.fetch(POLLY_CHANNEL_ID_OP);
+      console.log("##### Polly bet detected for ticket " + overtimeMarketTrade.id);
     }
 
     let isSystem = overtimeMarketTrade.isSystem;
@@ -1567,7 +1594,7 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
         );
       }
 
-      await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel);
+      await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel, pollyChannel);
       console.log("#@#@#@Sending V2 message: " + JSON.stringify(embed));
       writenOvertimeV2Trades.push(overtimeMarketTrade.id);
       redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
@@ -1780,10 +1807,10 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
         );
       }
 
-      await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel);
+      await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel, pollyChannel);
       if (overtimeMarketTrade.isLive && overtimeMarketTrade.marketsData.length > 1) {
         const parlayLiveChannel = await clientNewListings.channels.fetch(CHANNEL_PARLAY_LIVE);
-        await sendMessageIfNotDuplicate(parlayLiveChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel);
+        await sendMessageIfNotDuplicate(parlayLiveChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel, pollyChannel);
       }
       console.log("#@#@#@Sending V2 message: " + JSON.stringify(embed));
       writenOvertimeV2Trades.push(overtimeMarketTrade.id);
@@ -2047,12 +2074,7 @@ async function printV2ARBMessage(overtimeMarketTrade, typeMap) {
       console.warn(`⚠️ ARB Skipping trade ${overtimeMarketTrade?.id} — no marketsData`);
       return; // skip to the next trade
     }
-    const address = Web3.utils.toChecksumAddress(overtimeMarketTrade.ticketOwner);
-    let isSmart = await isSmartContract(web3ARB, address);
-    let smartTicketOwner;
-    if (isSmart) {
-      smartTicketOwner = await getOwnerOfSmartAccount(esoARBContract, overtimeMarketTrade.ticketOwner);
-    }
+    let smartTicketOwner = getEoaForSmartTicketOwner(overtimeMarketTrade.ticketOwner);
 
     let mollyChannel;
     let mollyBetData = null;
@@ -2611,28 +2633,6 @@ async function getOvertimeV2ARBTrades(){
 }
 
 
-async function isSmartContract(web3, address) {
-  try {
-
-    const code = await web3.eth.getCode(address);
-    return code && code !== '0x';
-  } catch (error) {
-    console.error('Error checking if address is a smart contract:', error);
-    return false;
-  }
-}
-
-async function getOwnerOfSmartAccount(contract, ticketOwner) {
-  try {
-    const owner = await contract.methods.getOwner(ticketOwner).call();
-    return owner;
-  } catch (err) {
-    console.error("Error calling getOwner():", err);
-    return null;
-  }
-}
-
-
 const OVER_ADDRESS_BASE = "0x7750c092e284e2c7366f50c8306f43c7eb2e82a2";
 
 async function printV2BaseMessage(overtimeMarketTrade, typeMap) {
@@ -2645,12 +2645,7 @@ async function printV2BaseMessage(overtimeMarketTrade, typeMap) {
       console.warn(`⚠️ Skipping trade ${overtimeMarketTrade?.id} — no marketsData`);
       return; // skip to the next trade
     }
-    const address = Web3.utils.toChecksumAddress(overtimeMarketTrade.ticketOwner);
-    let isSmart = await isSmartContract(web3BASE, address);
-    let smartTicketOwner;
-    if (isSmart) {
-      smartTicketOwner = await getOwnerOfSmartAccount(esoBASEContract, overtimeMarketTrade.ticketOwner);
-    }
+    let smartTicketOwner = getEoaForSmartTicketOwner(overtimeMarketTrade.ticketOwner);
     let isSystem = overtimeMarketTrade.isSystem;
     let mustWins;
     if (isSystem) {
