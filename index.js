@@ -1,4 +1,63 @@
 require("dotenv").config();
+
+function attachWsErrorHandler(ws, label = 'WS') {
+  if (!ws || ws.__safeErrorHandlerAttached || typeof ws.on !== 'function') return;
+  ws.__safeErrorHandlerAttached = true;
+  ws.on('error', (err) => {
+    console.warn(`[${label}] WebSocket connection error:`, err?.code || '', err?.message || err);
+  });
+}
+
+function installSafeWebSocketHandler() {
+  let wsPath;
+  try {
+    wsPath = require.resolve('ws');
+  } catch {
+    return;
+  }
+  const wsModule = require(wsPath);
+  if (wsModule.__safeWsPatched) return;
+
+  const OriginalWebSocket = wsModule;
+  function SafeWebSocket(...args) {
+    const socket = new OriginalWebSocket(...args);
+    attachWsErrorHandler(socket);
+    return socket;
+  }
+  SafeWebSocket.prototype = OriginalWebSocket.prototype;
+  Object.setPrototypeOf(SafeWebSocket, OriginalWebSocket);
+  for (const prop of Object.getOwnPropertyNames(OriginalWebSocket)) {
+    if (prop !== 'length' && prop !== 'name' && prop !== 'prototype') {
+      SafeWebSocket[prop] = OriginalWebSocket[prop];
+    }
+  }
+  SafeWebSocket.__safeWsPatched = true;
+  require('module')._cache[wsPath].exports = SafeWebSocket;
+}
+
+function isTransientWsProcessError(err) {
+  const code = err?.code || '';
+  const msg = String(err?.message || err);
+  return code === 'ECONNRESET' ||
+      code === 'UND_ERR_SOCKET' ||
+      code === 'ETIMEDOUT' ||
+      code === 'EPIPE' ||
+      msg.includes('socket hang up') ||
+      msg.includes('Opening handshake has timed out') ||
+      msg.includes('other side closed');
+}
+
+installSafeWebSocketHandler();
+
+process.on('uncaughtException', (err) => {
+  if (isTransientWsProcessError(err)) {
+    console.warn('Prevented exit from transient WebSocket error:', err?.message || err);
+    return;
+  }
+  console.error('Uncaught exception:', err);
+  process.exit(1);
+});
+
 const {
   Client,
   Intents,
@@ -282,6 +341,60 @@ if (process.env.REDIS_URL) {
 
 }
 
+const ticketsInFlight = new Set();
+
+function normalizeTicketId(ticketId) {
+  return String(ticketId).toLowerCase();
+}
+
+function isTicketAlreadySent(writtenList, ticketId) {
+  const key = normalizeTicketId(ticketId);
+  return writtenList.some(id => normalizeTicketId(id) === key);
+}
+
+function tryClaimTicket(writtenList, redisKey, ticketId) {
+  const key = normalizeTicketId(ticketId);
+  if (isTicketAlreadySent(writtenList, ticketId)) return false;
+  if (ticketsInFlight.has(key)) return false;
+  ticketsInFlight.add(key);
+  writtenList.push(ticketId);
+  if (redisClient) redisClient.lpush(redisKey, ticketId);
+  return true;
+}
+
+function markTicketSent(writtenList, redisKey, ticketId) {
+  ticketsInFlight.delete(normalizeTicketId(ticketId));
+}
+
+function releaseTicketClaim(writtenList, redisKey, ticketId) {
+  if (!ticketId) return;
+  const key = normalizeTicketId(ticketId);
+  ticketsInFlight.delete(key);
+  for (let i = writtenList.length - 1; i >= 0; i--) {
+    if (normalizeTicketId(writtenList[i]) === key) {
+      writtenList.splice(i, 1);
+    }
+  }
+  if (redisClient) redisClient.lrem(redisKey, 0, ticketId);
+}
+
+function extractTicketIdFromField(value) {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  const linkMatch = trimmed.match(/\[([^\]]+)\]/);
+  if (linkMatch) return normalizeTicketId(linkMatch[1]);
+  const addrMatch = trimmed.match(/0x[a-fA-F0-9]{40}/);
+  if (addrMatch) return normalizeTicketId(addrMatch[0]);
+  return null;
+}
+
+function isTicketAddressField(name) {
+  if (!name) return false;
+  const normalized = name.replace(/\s+/g, ' ').trim();
+  return normalized === ":link: Ticket address:" ||
+      normalized === ":link: Ticket  address:";
+}
+
 const WETH_ADDRESS_BASE = "0x4200000000000000000000000000000000000006";
 
 const THALES_ADDRESS_OP = "0x217D47011b23BB961eB6D93cA9945B7501a5BB11";
@@ -367,34 +480,64 @@ function  formatV2ARBAmount(numberForFormating, collateralAddress) {
   }
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
+function isTransientNetworkError(err) {
+  const code = err?.code || err?.cause?.code;
+  return code === 'UND_ERR_CONNECT_TIMEOUT' ||
+      code === 'UND_ERR_SOCKET' ||
+      code === 'ETIMEDOUT' ||
+      code === 'ECONNRESET' ||
+      code === 'ECONNABORTED' ||
+      code === 'EPIPE' ||
+      code === 'ENOTFOUND' ||
+      err?.status === 429;
+}
 
+function isTransientRpcError(err) {
+  const msg = String(err?.message || err || '');
+  return msg.includes('Invalid JSON RPC response') ||
+      msg.includes('connection not open') ||
+      msg.includes('connect timeout') ||
+      msg.includes('timeout') ||
+      isTransientNetworkError(err);
+}
+
+function isIgnorableDiscordDeleteError(err) {
+  return err?.code === 10008;
+}
+
+async function withDiscordRetry(fn, { retries = 3, delayMs = 2000, label = 'Discord request' } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt === retries || !isTransientNetworkError(err)) throw err;
+      const waitMs = delayMs * (attempt + 1);
+      console.warn(`⚠️ ${label} failed (attempt ${attempt + 1}/${retries + 1}), retrying in ${waitMs}ms:`, err?.message || err);
+      await sleep(waitMs);
+    }
+  }
+  throw lastErr;
+}
 
 async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additionalText,mollyChannel, pollyChannel) {
-  const messages = await channel.messages.fetch({ limit: 100 });
-
-  const duplicate = messages.find(msg => {
-    return msg.embeds.some(embed => {
-      if (!embed.fields || embed.fields.length === 0) return false;
-
-      return embed.fields.some(field =>
-          field.value.includes(uniqueValue)
-      );
-    });
-  });
-
-  if (duplicate) {
-    console.log(`Embed with value "${uniqueValue}" already exists.`);
-    return;
-  }
   if(mollyChannel){
-  mollyChannel.send({ embeds: [embed] }).catch(console.error);
+    await mollyChannel.send({ embeds: [embed] }).catch(err => {
+      console.error(`Failed to send molly message for ${uniqueValue}:`, err?.message || err);
+    });
   }
   if(pollyChannel){
-  pollyChannel.send({ embeds: [embed] }).catch(console.error);
+    await pollyChannel.send({ embeds: [embed] }).catch(err => {
+      console.error(`Failed to send polly message for ${uniqueValue}:`, err?.message || err);
+    });
   }
 
-  channel.send({ embeds: [embed] }).catch(console.error);
+  await channel.send({ embeds: [embed] });
   if(additionalText){
     embed.fields.push(
         {
@@ -675,19 +818,21 @@ clientNewListings.once("ready", () => {
   console.log("initial new operations");
   updateTokenPrice();
   updateCirculatingAndMarketCap();
+  startDuplicateCleanupSchedulers();
 });
 
 setInterval(function () {
   console.log("get L2 trades");
-  getOvertimeV2Trades();
-  getOvertimeV2BASETrades();
-  getOvertimeV2ARBTrades();
+  (async () => {
+    try {
+      await getOvertimeV2Trades();
+      await getOvertimeV2BASETrades();
+      await getOvertimeV2ARBTrades();
+    } catch (e) {
+      console.warn("There was a problem while getting L2 trades:", e?.message || e);
+    }
+  })();
 }, 2 * 60 * 1000);
-
-setInterval(function () {
-  console.log("cleaning duplicates");
-  cleanUpDuplicateMessages();
-}, 1 * 60 * 1000);
 
 setInterval(function () {
   console.log("update prices");
@@ -1292,7 +1437,7 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
         overtimeMarketTrade.marketsData.length === 0
     ) {
       console.warn(`⚠️ Skipping trade ${overtimeMarketTrade?.id} — no marketsData`);
-      return; // skip to the next trade
+      return;
     }
     let smartTicketOwner = getEoaForSmartTicketOwner(overtimeMarketTrade.ticketOwner);
 
@@ -1594,10 +1739,13 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
         );
       }
 
+      if (!tryClaimTicket(writenOvertimeV2Trades, overtimeV2TradesKey, overtimeMarketTrade.id)) {
+        console.log(`Skipping duplicate OP ticket ${overtimeMarketTrade.id}`);
+        return;
+      }
       await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel, pollyChannel);
       console.log("#@#@#@Sending V2 message: " + JSON.stringify(embed));
-      writenOvertimeV2Trades.push(overtimeMarketTrade.id);
-      redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
+      markTicketSent(writenOvertimeV2Trades, overtimeV2TradesKey, overtimeMarketTrade.id);
 
     } else {
       let parlayMessage;
@@ -1807,50 +1955,57 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
         );
       }
 
+      if (!tryClaimTicket(writenOvertimeV2Trades, overtimeV2TradesKey, overtimeMarketTrade.id)) {
+        console.log(`Skipping duplicate OP ticket ${overtimeMarketTrade.id}`);
+        return;
+      }
       await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel, pollyChannel);
       if (overtimeMarketTrade.isLive && overtimeMarketTrade.marketsData.length > 1) {
         const parlayLiveChannel = await clientNewListings.channels.fetch(CHANNEL_PARLAY_LIVE);
         await sendMessageIfNotDuplicate(parlayLiveChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel, pollyChannel);
       }
       console.log("#@#@#@Sending V2 message: " + JSON.stringify(embed));
-      writenOvertimeV2Trades.push(overtimeMarketTrade.id);
-      redisClient.lpush(overtimeV2TradesKey, overtimeMarketTrade.id);
+      markTicketSent(writenOvertimeV2Trades, overtimeV2TradesKey, overtimeMarketTrade.id);
     }
 
 
   } catch (e) {
+    releaseTicketClaim(writenOvertimeV2Trades, overtimeV2TradesKey, overtimeMarketTrade?.id);
     console.log("There was a problem while getting overtime V2 trades", e);
   }
 }
 
 async function getOvertimeV2Trades(){
+  try {
+    if (!typeInfoMap) return;
+    const activeTickets = await getAllActiveTicketsPaged(v2Contract);
+    let overtimeTrades = await robustGetTicketsData(v2TicketContract, activeTickets,'OP:getTicketsData');
 
-  if (!typeInfoMap) return;
-  const activeTickets = await getAllActiveTicketsPaged(v2Contract);
-  let overtimeTrades = await robustGetTicketsData(v2TicketContract, activeTickets,'OP:getTicketsData');
+    const typeMap = new Map(Object.entries(JSON.parse(JSON.stringify(typeInfoMap))));
+    var startdate = new Date();
+    var durationInMinutes = 30;
+    startdate.setMinutes(startdate.getMinutes() - durationInMinutes);
+    let startDateUnixTime = Math.floor(startdate.getTime());
+    console.log("##### length before is "+overtimeTrades.length);
+    overtimeTrades = overtimeTrades.filter(item => {
+      const isNewNormal =
+          startDateUnixTime < Number(item.createdAt * 1000) &&
+          !isTicketAlreadySent(writenOvertimeV2Trades, item.id);
 
-  const typeMap = new Map(Object.entries(JSON.parse(JSON.stringify(typeInfoMap))));
-  var startdate = new Date();
-  var durationInMinutes = 30;
-  startdate.setMinutes(startdate.getMinutes() - durationInMinutes);
-  let startDateUnixTime = Math.floor(startdate.getTime());
-  console.log("##### length before is "+overtimeTrades.length);
-  overtimeTrades = overtimeTrades.filter(item => {
-    const isNewNormal =
-        startDateUnixTime < Number(item.createdAt * 1000) &&
-        !writenOvertimeV2Trades.includes(item.id);
-
-    return isNewNormal;
-  });console.log("##### length is "+overtimeTrades.length);
-  let overtimeTradesUQ = await overtimeTrades.filter((value, index, self) =>
-          index === self.findIndex((t) => (
-              t.id == value.id || t.createdAt == value.createdAt
-          ))
-  )
-  for (const overtimeMarketTrade of overtimeTradesUQ) {
-    if ((startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2Trades.includes(overtimeMarketTrade.id))) {
-      await printV2OPMessage(overtimeMarketTrade, typeMap);
+      return isNewNormal;
+    });console.log("##### length is "+overtimeTrades.length);
+    let overtimeTradesUQ = await overtimeTrades.filter((value, index, self) =>
+            index === self.findIndex((t) => (
+                t.id == value.id || t.createdAt == value.createdAt
+            ))
+    )
+    for (const overtimeMarketTrade of overtimeTradesUQ) {
+      if ((startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !isTicketAlreadySent(writenOvertimeV2Trades, overtimeMarketTrade.id))) {
+        await printV2OPMessage(overtimeMarketTrade, typeMap);
+      }
     }
+  } catch (e) {
+    console.warn("There was a problem while getting overtime V2 trades", e?.message || e);
   }
 }
 
@@ -2008,25 +2163,49 @@ const TICKET_ADDRESS_LABEL = ":link: Ticket address:";
 const PAGE_SIZE = 300;
 const DATA_CHUNK = 200;
 
-async function callWithLabel(label, fn) {
-  try {
-    return await fn();
-  } catch (e) {
-    console.error(`❌ Revert on: ${label}`, e && e.message ? e.message : e);
-    throw e;
+async function withRpcRetry(fn, { retries = 3, delayMs = 1500, label = 'RPC request' } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      const msg = String(e?.message || e);
+      const isRevert = msg.includes('execution reverted') || msg.includes('revert');
+      if (isRevert || attempt === retries || !isTransientRpcError(e)) {
+        console.error(`❌ Revert on: ${label}`, msg);
+        throw e;
+      }
+      const waitMs = delayMs * (attempt + 1);
+      console.warn(`⚠️ ${label} RPC error (attempt ${attempt + 1}/${retries + 1}), retrying in ${waitMs}ms:`, msg);
+      await sleep(waitMs);
+    }
   }
+  throw lastErr;
+}
+
+async function callWithLabel(label, fn) {
+  return withRpcRetry(fn, { label });
 }
 
 async function getAllActiveTicketsPaged(v2CoreContract) {
   const all = [];
   for (let start = 0; ; start += PAGE_SIZE) {
-    const page = await callWithLabel(
-        `getActiveTickets(start=${start}, size=${PAGE_SIZE})`,
-        () => v2CoreContract.methods.getActiveTickets(start, PAGE_SIZE).call()
-    );
-    if (!page || page.length === 0) break;
-    all.push(...page);
-    if (page.length < PAGE_SIZE) break; // last page
+    try {
+      const page = await callWithLabel(
+          `getActiveTickets(start=${start}, size=${PAGE_SIZE})`,
+          () => v2CoreContract.methods.getActiveTickets(start, PAGE_SIZE).call()
+      );
+      if (!page || page.length === 0) break;
+      all.push(...page);
+      if (page.length < PAGE_SIZE) break;
+    } catch (e) {
+      if (all.length > 0) {
+        console.warn(`⚠️ getActiveTickets failed at start=${start}, using ${all.length} tickets fetched so far`);
+        return all;
+      }
+      throw e;
+    }
   }
   return all;
 }
@@ -2045,7 +2224,10 @@ async function robustGetTicketsData(ticketContract, ids, labelBase = 'getTickets
       );
       out.push(...data);
     } catch (err) {
-      // If a single id still reverts, skip it (it went stale)
+      const msg = String(err?.message || err);
+      if (isTransientRpcError(err) && !msg.includes('execution reverted')) {
+        throw err;
+      }
       if (arr.length === 1) {
         console.warn(`⚠️ Skipping stale/invalid ticketId: ${arr[0]}`);
         return;
@@ -2072,7 +2254,7 @@ async function printV2ARBMessage(overtimeMarketTrade, typeMap) {
         overtimeMarketTrade.marketsData.length === 0
     ) {
       console.warn(`⚠️ ARB Skipping trade ${overtimeMarketTrade?.id} — no marketsData`);
-      return; // skip to the next trade
+      return;
     }
     let smartTicketOwner = getEoaForSmartTicketOwner(overtimeMarketTrade.ticketOwner);
 
@@ -2341,39 +2523,40 @@ async function printV2ARBMessage(overtimeMarketTrade, typeMap) {
           additionalText = "ARB: NORMAL TRADE";
         }
       }
-      if (!writenOvertimeV2ARBTrades.includes(overtimeMarketTrade.id)) {
-        writenOvertimeV2ARBTrades.push(overtimeMarketTrade.id);
-        let newVar1 = await redisClient.lpush(overtimeV2ARBTradesKey, overtimeMarketTrade.id);
-        if (isSGP) {
-          embed.fields.push(
-              {
-                name: ":coin: SGP:",
-                value: isSGP,
-              }
-          );
-        }
-
-        if (smartTicketOwner) {
-          embed.fields.push(
-              {
-                name: ":coin: Smart ticket owner:",
-                value: smartTicketOwner,
-              }
-          );
-        }
-
-        if (mollyBetData && mollyBetData.customerId) {
-          embed.fields.push(
-              {
-                name: ":coin: Customer ID:",
-                value: mollyBetData.customerId,
-              }
-          );
-        }
-
-        await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel)
-        console.log("#@#@#@Sending arb message: " + JSON.stringify(embed));
+      if (isSGP) {
+        embed.fields.push(
+            {
+              name: ":coin: SGP:",
+              value: isSGP,
+            }
+        );
       }
+
+      if (smartTicketOwner) {
+        embed.fields.push(
+            {
+              name: ":coin: Smart ticket owner:",
+              value: smartTicketOwner,
+            }
+        );
+      }
+
+      if (mollyBetData && mollyBetData.customerId) {
+        embed.fields.push(
+            {
+              name: ":coin: Customer ID:",
+              value: mollyBetData.customerId,
+            }
+        );
+      }
+
+      if (!tryClaimTicket(writenOvertimeV2ARBTrades, overtimeV2ARBTradesKey, overtimeMarketTrade.id)) {
+        console.log(`Skipping duplicate ARB ticket ${overtimeMarketTrade.id}`);
+        return;
+      }
+      await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel)
+      console.log("#@#@#@Sending arb message: " + JSON.stringify(embed));
+      markTicketSent(writenOvertimeV2ARBTrades, overtimeV2ARBTradesKey, overtimeMarketTrade.id);
     } else {
       let parlayMessage;
       try {
@@ -2556,79 +2739,84 @@ async function printV2ARBMessage(overtimeMarketTrade, typeMap) {
       }
 
 
-      if (!writenOvertimeV2ARBTrades.includes(overtimeMarketTrade.id)) {
-        writenOvertimeV2ARBTrades.push(overtimeMarketTrade.id);
-        let lpush = await redisClient.lpush(overtimeV2ARBTradesKey, overtimeMarketTrade.id);
-        if (isSGP) {
-          embed.fields.push(
-              {
-                name: ":coin: SGP:",
-                value: isSGP,
-              }
-          );
-        }
-
-        if (smartTicketOwner) {
-          embed.fields.push(
-              {
-                name: ":coin: Smart ticket owner:",
-                value: smartTicketOwner,
-              }
-          );
-        }
-
-        if (mollyBetData && mollyBetData.customerId) {
-          embed.fields.push(
-              {
-                name: ":coin: Customer ID:",
-                value: mollyBetData.customerId,
-              }
-          );
-        }
-
-        await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel)
-        if (overtimeMarketTrade.isLive && overtimeMarketTrade.marketsData.length > 1) {
-          const parlayLiveChannel = await clientNewListings.channels.fetch(CHANNEL_PARLAY_LIVE);
-          await sendMessageIfNotDuplicate(parlayLiveChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel);
-        }
-        console.log("#@#@#@Sending arb message: " + JSON.stringify(embed));
+      if (!tryClaimTicket(writenOvertimeV2ARBTrades, overtimeV2ARBTradesKey, overtimeMarketTrade.id)) {
+        console.log(`Skipping duplicate ARB ticket ${overtimeMarketTrade.id}`);
+        return;
       }
+      if (isSGP) {
+        embed.fields.push(
+            {
+              name: ":coin: SGP:",
+              value: isSGP,
+            }
+        );
+      }
+
+      if (smartTicketOwner) {
+        embed.fields.push(
+            {
+              name: ":coin: Smart ticket owner:",
+              value: smartTicketOwner,
+            }
+        );
+      }
+
+      if (mollyBetData && mollyBetData.customerId) {
+        embed.fields.push(
+            {
+              name: ":coin: Customer ID:",
+              value: mollyBetData.customerId,
+            }
+        );
+      }
+
+      await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel)
+      if (overtimeMarketTrade.isLive && overtimeMarketTrade.marketsData.length > 1) {
+        const parlayLiveChannel = await clientNewListings.channels.fetch(CHANNEL_PARLAY_LIVE);
+        await sendMessageIfNotDuplicate(parlayLiveChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel);
+      }
+      console.log("#@#@#@Sending arb message: " + JSON.stringify(embed));
+      markTicketSent(writenOvertimeV2ARBTrades, overtimeV2ARBTradesKey, overtimeMarketTrade.id);
     }
 
 
   } catch (e) {
+    releaseTicketClaim(writenOvertimeV2ARBTrades, overtimeV2ARBTradesKey, overtimeMarketTrade?.id);
     console.log("There was a problem while getting overtime V2 trades arb #@#@#@@#@", e);
   }
 }
 
 async function getOvertimeV2ARBTrades(){
+  try {
+    if (!typeInfoMap) return;
+    const activeTickets = await getAllActiveTicketsPaged(v2ARBContract);
+    let overtimeTrades = await robustGetTicketsData(v2ARBTicketContract, activeTickets,'ARB:getTicketsData');
+    const typeMap = new Map(Object.entries(JSON.parse(JSON.stringify(typeInfoMap))));
+    var startdate = new Date();
+    var durationInMinutes = 30;
+    startdate.setMinutes(startdate.getMinutes() - durationInMinutes);
+    let startDateUnixTime = Math.floor(startdate.getTime());
+    console.log("##### length before is "+overtimeTrades.length);
+    overtimeTrades = overtimeTrades.filter(item => {
+      const isNewNormal =
+          startDateUnixTime < Number(item.createdAt * 1000) &&
+          !isTicketAlreadySent(writenOvertimeV2ARBTrades, item.id);
 
-  if (!typeInfoMap) return;
-  const activeTickets = await getAllActiveTicketsPaged(v2ARBContract);
-  let overtimeTrades = await robustGetTicketsData(v2ARBTicketContract, activeTickets,'ARB:getTicketsData');
-  const typeMap = new Map(Object.entries(JSON.parse(JSON.stringify(typeInfoMap))));
-  var startdate = new Date();
-  var durationInMinutes = 30;
-  startdate.setMinutes(startdate.getMinutes() - durationInMinutes);
-  let startDateUnixTime = Math.floor(startdate.getTime());
-  console.log("##### length before is "+overtimeTrades.length);
-  overtimeTrades = overtimeTrades.filter(item => {
-    const isNewNormal =
-        startDateUnixTime < Number(item.createdAt * 1000) &&
-        !writenOvertimeV2ARBTrades.includes(item.id);
-
-    return isNewNormal ;
-  });console.log("##### length is "+overtimeTrades.length);
-  let overtimeTradesUQ = await overtimeTrades.filter((value, index, self) =>
-          index === self.findIndex((t) => (
-              t.id == value.id || t.createdAt == value.createdAt
-          ))
-  )
-  console.log("##### length is after dupl "+overtimeTradesUQ.length);
-  for (const overtimeMarketTrade of overtimeTradesUQ) {
-    if ((startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2ARBTrades.includes(overtimeMarketTrade.id))) {
-      await printV2ARBMessage(overtimeMarketTrade, typeMap);
+      return isNewNormal ;
+    });console.log("##### length is "+overtimeTrades.length);
+    let overtimeTradesUQ = await overtimeTrades.filter((value, index, self) =>
+            index === self.findIndex((t) => (
+                t.id == value.id || t.createdAt == value.createdAt
+            ))
+    )
+    console.log("##### length is after dupl "+overtimeTradesUQ.length);
+    for (const overtimeMarketTrade of overtimeTradesUQ) {
+      if ((startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !isTicketAlreadySent(writenOvertimeV2ARBTrades, overtimeMarketTrade.id))) {
+        await printV2ARBMessage(overtimeMarketTrade, typeMap);
+      }
     }
+  } catch (e) {
+    console.warn("There was a problem while getting overtime V2 trades arb", e?.message || e);
   }
 }
 
@@ -2913,39 +3101,40 @@ async function printV2BaseMessage(overtimeMarketTrade, typeMap) {
           additionalText = "BASE: NORMAL TRADE";
         }
       }
-      if (!writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id)) {
-        writenOvertimeV2BASETrades.push(overtimeMarketTrade.id);
-        let newVar1 = await redisClient.lpush(overtimeV2BASETradesKey, overtimeMarketTrade.id);
-        if (isSGP) {
-          embed.fields.push(
-              {
-                name: ":coin: SGP:",
-                value: isSGP,
-              }
-          );
-        }
-
-        if (smartTicketOwner) {
-          embed.fields.push(
-              {
-                name: ":coin: Smart ticket owner:",
-                value: smartTicketOwner,
-              }
-          );
-        }
-
-        if (mollyBetData && mollyBetData.customerId) {
-          embed.fields.push(
-              {
-                name: ":coin: Customer ID:",
-                value: mollyBetData.customerId,
-              }
-          );
-        }
-
-        await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel)
-        console.log("#@#@#@Sending base message: " + JSON.stringify(embed));
+      if (!tryClaimTicket(writenOvertimeV2BASETrades, overtimeV2BASETradesKey, overtimeMarketTrade.id)) {
+        console.log(`Skipping duplicate BASE ticket ${overtimeMarketTrade.id}`);
+        return;
       }
+      if (isSGP) {
+        embed.fields.push(
+            {
+              name: ":coin: SGP:",
+              value: isSGP,
+            }
+        );
+      }
+
+      if (smartTicketOwner) {
+        embed.fields.push(
+            {
+              name: ":coin: Smart ticket owner:",
+              value: smartTicketOwner,
+            }
+        );
+      }
+
+      if (mollyBetData && mollyBetData.customerId) {
+        embed.fields.push(
+            {
+              name: ":coin: Customer ID:",
+              value: mollyBetData.customerId,
+            }
+        );
+      }
+
+      await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel)
+      console.log("#@#@#@Sending base message: " + JSON.stringify(embed));
+      markTicketSent(writenOvertimeV2BASETrades, overtimeV2BASETradesKey, overtimeMarketTrade.id);
     } else {
       let parlayMessage;
       try {
@@ -3130,116 +3319,162 @@ async function printV2BaseMessage(overtimeMarketTrade, typeMap) {
       }
 
 
-      if (!writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id)) {
-        writenOvertimeV2BASETrades.push(overtimeMarketTrade.id);
-        let lpush = await redisClient.lpush(overtimeV2BASETradesKey, overtimeMarketTrade.id);
-        if (isSGP) {
-          embed.fields.push(
-              {
-                name: ":coin: SGP:",
-                value: isSGP,
-              }
-          );
-        }
-
-        if (smartTicketOwner) {
-          embed.fields.push(
-              {
-                name: ":coin: Smart ticket owner:",
-                value: smartTicketOwner,
-              }
-          );
-        }
-
-        if (mollyBetData && mollyBetData.customerId) {
-          embed.fields.push(
-              {
-                name: ":coin: Customer ID:",
-                value: mollyBetData.customerId,
-              }
-          );
-        }
-
-        await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel)
-        if (overtimeMarketTrade.isLive && overtimeMarketTrade.marketsData.length > 1) {
-          const parlayLiveChannel = await clientNewListings.channels.fetch(CHANNEL_PARLAY_LIVE);
-          await sendMessageIfNotDuplicate(parlayLiveChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel);
-        }
-        console.log("#@#@#@Sending base message: " + JSON.stringify(embed));
+      if (!tryClaimTicket(writenOvertimeV2BASETrades, overtimeV2BASETradesKey, overtimeMarketTrade.id)) {
+        console.log(`Skipping duplicate BASE ticket ${overtimeMarketTrade.id}`);
+        return;
       }
+      if (isSGP) {
+        embed.fields.push(
+            {
+              name: ":coin: SGP:",
+              value: isSGP,
+            }
+        );
+      }
+
+      if (smartTicketOwner) {
+        embed.fields.push(
+            {
+              name: ":coin: Smart ticket owner:",
+              value: smartTicketOwner,
+            }
+        );
+      }
+
+      if (mollyBetData && mollyBetData.customerId) {
+        embed.fields.push(
+            {
+              name: ":coin: Customer ID:",
+              value: mollyBetData.customerId,
+            }
+        );
+      }
+
+      await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel)
+      if (overtimeMarketTrade.isLive && overtimeMarketTrade.marketsData.length > 1) {
+        const parlayLiveChannel = await clientNewListings.channels.fetch(CHANNEL_PARLAY_LIVE);
+        await sendMessageIfNotDuplicate(parlayLiveChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel);
+      }
+      console.log("#@#@#@Sending base message: " + JSON.stringify(embed));
+      markTicketSent(writenOvertimeV2BASETrades, overtimeV2BASETradesKey, overtimeMarketTrade.id);
     }
 
 
   } catch (e) {
+    releaseTicketClaim(writenOvertimeV2BASETrades, overtimeV2BASETradesKey, overtimeMarketTrade?.id);
     console.log("There was a problem while getting overtime V2 trades base #@#@#@@#@", e);
   }
 }
 
 async function getOvertimeV2BASETrades(){
+  try {
+    if (!typeInfoMap) return;
+    const activeTickets = await getAllActiveTicketsPaged(v2BASEContract);
+    let overtimeTrades = await robustGetTicketsData(v2BASETicketContract, activeTickets,'BASE:getTicketsData');
+    const typeMap = new Map(Object.entries(JSON.parse(JSON.stringify(typeInfoMap))));
+    var startdate = new Date();
+    var durationInMinutes = 30;
+    startdate.setMinutes(startdate.getMinutes() - durationInMinutes);
+    let startDateUnixTime = Math.floor(startdate.getTime());
+    console.log("##### length before is "+overtimeTrades.length);
+    overtimeTrades = overtimeTrades.filter(item => {
+      const isNewNormal =
+          startDateUnixTime < Number(item.createdAt * 1000) &&
+          !isTicketAlreadySent(writenOvertimeV2BASETrades, item.id);
 
-  if (!typeInfoMap) return;
-  const activeTickets = await getAllActiveTicketsPaged(v2BASEContract);
-  let overtimeTrades = await robustGetTicketsData(v2BASETicketContract, activeTickets,'BASE:getTicketsData');
-  const typeMap = new Map(Object.entries(JSON.parse(JSON.stringify(typeInfoMap))));
-  var startdate = new Date();
-  var durationInMinutes = 30;
-  startdate.setMinutes(startdate.getMinutes() - durationInMinutes);
-  let startDateUnixTime = Math.floor(startdate.getTime());
-  console.log("##### length before is "+overtimeTrades.length);
-  overtimeTrades = overtimeTrades.filter(item => {
-    const isNewNormal =
-        startDateUnixTime < Number(item.createdAt * 1000) &&
-        !writenOvertimeV2BASETrades.includes(item.id);
 
-
-    return isNewNormal;
-  });console.log("##### length is "+overtimeTrades.length);
-  let overtimeTradesUQ = await overtimeTrades.filter((value, index, self) =>
-          index === self.findIndex((t) => (
-              t.id == value.id || t.createdAt == value.createdAt
-          ))
-  )
-  console.log("##### length is after dupl "+overtimeTradesUQ.length);
-  for (const overtimeMarketTrade of overtimeTradesUQ) {
-    if (  (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !writenOvertimeV2BASETrades.includes(overtimeMarketTrade.id))) {
-      await printV2BaseMessage(overtimeMarketTrade, typeMap);
+      return isNewNormal;
+    });console.log("##### length is "+overtimeTrades.length);
+    let overtimeTradesUQ = await overtimeTrades.filter((value, index, self) =>
+            index === self.findIndex((t) => (
+                t.id == value.id || t.createdAt == value.createdAt
+            ))
+    )
+    console.log("##### length is after dupl "+overtimeTradesUQ.length);
+    for (const overtimeMarketTrade of overtimeTradesUQ) {
+      if (  (startDateUnixTime < Number(overtimeMarketTrade.createdAt * 1000) && !isTicketAlreadySent(writenOvertimeV2BASETrades, overtimeMarketTrade.id))) {
+        await printV2BaseMessage(overtimeMarketTrade, typeMap);
+      }
     }
+  } catch (e) {
+    console.warn("There was a problem while getting overtime V2 trades base", e?.message || e);
   }
 }
 
-async function cleanUpDuplicateMessages() {
-  for (const channelId of ALL_CHANNEL_IDS) {
-    try {
-      const channel = await clientNewListings.channels.fetch(channelId);
-      const messages = await channel.messages.fetch({ limit: 50 });
+const channelCleanupInProgress = new Map();
+const CHANNEL_CLEANUP_INTERVAL_MS = 1 * 60 * 1000;
+const CHANNEL_CLEANUP_STAGGER_MS = 4000;
 
-      const seenTickets = new Map();
-
-      for (const [id, message] of messages) {
-        if (!message.embeds || message.embeds.length === 0) continue;
-
-        const ticketField = message.embeds
-            .flatMap(embed => embed.fields || [])
-            .find(field => field.name === TICKET_ADDRESS_LABEL || field.name === ":link: Ticket  address:");
-        if (!ticketField || !ticketField.value) continue;
-
-        const ticketIdMatch = ticketField.value.match(/\[([^\]]+)\]/); // extract content from [ticketId](...)
-        if (!ticketIdMatch) continue;
-
-        const ticketId = ticketIdMatch[1];
-
-        if (seenTickets.has(ticketId)) {
-          console.log(`Deleting duplicate message in channel ${channelId} for ticket: ${ticketId}`);
-          await message.delete().catch(console.error);
-        } else {
-          seenTickets.set(ticketId, message);
-        }
-      }
-
-    } catch (err) {
-      console.error(`❌ Error cleaning up messages in channel ${channelId}:`, err);
-    }
+async function cleanUpDuplicateMessagesInChannel(channelId) {
+  if (channelCleanupInProgress.get(channelId)) {
+    console.log(`Duplicate cleanup already in progress for channel ${channelId}, skipping`);
+    return;
   }
+  channelCleanupInProgress.set(channelId, true);
+  try {
+    const channel = await withDiscordRetry(
+        () => clientNewListings.channels.fetch(channelId),
+        { label: `fetch channel ${channelId}` }
+    );
+    if (!channel) {
+      console.warn(`⚠️ Cleanup skipped: channel ${channelId} not found or bot has no access`);
+      return;
+    }
+    if (!channel.isTextBased?.() || !channel.messages) {
+      console.warn(`⚠️ Cleanup skipped: channel ${channelId} is not a text channel`);
+      return;
+    }
+    const messages = await withDiscordRetry(
+        () => channel.messages.fetch({ limit: 100 }),
+        { label: `fetch messages in channel ${channelId}` }
+    );
+
+    const seenTickets = new Map();
+
+    for (const [id, message] of messages) {
+      if (!message.embeds || message.embeds.length === 0) continue;
+
+      const ticketField = message.embeds
+          .flatMap(embed => embed.fields || [])
+          .find(field => isTicketAddressField(field.name));
+      if (!ticketField || !ticketField.value) continue;
+
+      const ticketId = extractTicketIdFromField(ticketField.value);
+      if (!ticketId) continue;
+
+      if (seenTickets.has(ticketId)) {
+        console.log(`Deleting duplicate message in channel ${channelId} for ticket: ${ticketId}`);
+        await message.delete().catch(err => {
+          if (!isIgnorableDiscordDeleteError(err)) {
+            console.error(`Failed to delete duplicate in channel ${channelId}:`, err?.message || err);
+          }
+        });
+      } else {
+        seenTickets.set(ticketId, message);
+      }
+    }
+  } catch (err) {
+    if (isTransientNetworkError(err)) {
+      console.warn(`⚠️ Transient error cleaning channel ${channelId}, will retry on next run:`, err?.message || err);
+    } else {
+      console.error(`❌ Error cleaning up messages in channel ${channelId}:`, err?.message || err);
+    }
+  } finally {
+    channelCleanupInProgress.set(channelId, false);
+  }
+}
+
+function startDuplicateCleanupSchedulers() {
+  ALL_CHANNEL_IDS.forEach((channelId, index) => {
+    const runCleanup = () => {
+      cleanUpDuplicateMessagesInChannel(channelId).catch(err => {
+        console.warn(`Duplicate cleanup failed for channel ${channelId}:`, err?.message || err);
+      });
+    };
+    setTimeout(runCleanup, index * CHANNEL_CLEANUP_STAGGER_MS);
+    setInterval(runCleanup, CHANNEL_CLEANUP_INTERVAL_MS);
+  });
+  console.log(`Started duplicate cleanup schedulers for ${ALL_CHANNEL_IDS.length} channels (every ${CHANNEL_CLEANUP_INTERVAL_MS / 1000}s, staggered ${CHANNEL_CLEANUP_STAGGER_MS / 1000}s apart)`);
 }
 
 function toChecksummed(address) {
@@ -3258,19 +3493,34 @@ startBASENewTicketListener();
 
 
 async function fetchTicket(contractTicket, id) {
-  const arr = await contractTicket.methods.getTicketsData([id]).call();
-  return arr?.[0];
+  return callWithLabel(`fetchTicket(${id})`, async () => {
+    const arr = await contractTicket.methods.getTicketsData([id]).call();
+    return arr?.[0];
+  });
 }
 
-function makeWs(websocketUrl) {
-  return new Web3(new Web3.providers.WebsocketProvider(websocketUrl, {
+function makeWs(websocketUrl, label = 'WS') {
+  const provider = new Web3.providers.WebsocketProvider(websocketUrl, {
     clientConfig: { keepalive: true, keepaliveInterval: 30000 },
     reconnect: { auto: true, delay: 3000, maxAttempts: Infinity, onTimeout: true },
-  }));
+  });
+
+  if (typeof provider.on === 'function') {
+    provider.on('error', (err) => {
+      console.warn(`[${label}] WebSocket provider error:`, err?.message || err);
+    });
+    provider.on('connect', () => {
+      attachWsErrorHandler(provider.connection, label);
+    });
+  }
+
+  attachWsErrorHandler(provider.connection, label);
+
+  return new Web3(provider);
 }
 
 function startOPNewTicketListener() {
-  const web3OPws = makeWs(process.env.OP_WSS_URL);
+  const web3OPws = makeWs(process.env.OP_WSS_URL, 'OP');
   const coreWS   = new web3OPws.eth.Contract(sportsV2Parse, OP_CORE_ADDR);
 
   console.log("[OP] Subscribing to NewTicket…");
@@ -3279,7 +3529,7 @@ function startOPNewTicketListener() {
         try {
           const id = ev.returnValues.ticket;
           console.log("[OP] NewTicket event for ticket:", id);
-          if (!id || writenOvertimeV2Trades.includes(id)) return;
+          if (!id || isTicketAlreadySent(writenOvertimeV2Trades, id)) return;
           console.log("[OP] NewTicket event Not duplicated for ticket:", id);
           const t = await fetchTicket(v2TicketContract, id); // reuse your existing OP ticket contract (HTTP)
           if (!t) return;
@@ -3296,7 +3546,7 @@ function startOPNewTicketListener() {
 }
 
 function startARBNewTicketListener() {
-  const web3ARBws = makeWs(process.env.WSS_ARB_URL);
+  const web3ARBws = makeWs(process.env.WSS_ARB_URL, 'ARB');
   const coreWS    = new web3ARBws.eth.Contract(sportsV2Parse, ARB_CORE_ADDR);
 
   console.log("[ARB] Subscribing to NewTicket…");
@@ -3304,7 +3554,7 @@ function startARBNewTicketListener() {
       .on("data", async (ev) => {
         try {
           const id = ev.returnValues.ticket;
-          if (!id || writenOvertimeV2ARBTrades.includes(id)) return;
+          if (!id || isTicketAlreadySent(writenOvertimeV2ARBTrades, id)) return;
           console.log("[ARB] NewTicket event for ticket:", id);
           const t = await fetchTicket(v2ARBTicketContract, id); // reuse your ARB ticket contract (HTTP)
           if (!t) return;
@@ -3321,7 +3571,7 @@ function startARBNewTicketListener() {
 
 // --- BASE listener (calls printV2BaseMessage) ---
 function startBASENewTicketListener() {
-  const web3BASEws = makeWs(process.env.WSS_BASE_URL);
+  const web3BASEws = makeWs(process.env.WSS_BASE_URL, 'BASE');
   const coreWS     = new web3BASEws.eth.Contract(sportsV2Parse, BASE_CORE_ADDR);
 
   console.log("[BASE] Subscribing to NewTicket…");
@@ -3329,7 +3579,7 @@ function startBASENewTicketListener() {
       .on("data", async (ev) => {
         try {
           const id = ev.returnValues.ticket;
-          if (!id || writenOvertimeV2BASETrades.includes(id)) return;
+          if (!id || isTicketAlreadySent(writenOvertimeV2BASETrades, id)) return;
           console.log("[BASE] NewTicket event for ticket:", id);
           const t = await fetchTicket(v2BASETicketContract, id); // reuse your BASE ticket contract (HTTP)
           if (!t) return;
