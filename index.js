@@ -35,27 +35,54 @@ function installSafeWebSocketHandler() {
   require('module')._cache[wsPath].exports = SafeWebSocket;
 }
 
+function isTransientNetworkError(err) {
+  const code = err?.code || err?.cause?.code;
+  return code === 'UND_ERR_CONNECT_TIMEOUT' ||
+      code === 'UND_ERR_SOCKET' ||
+      code === 'ETIMEDOUT' ||
+      code === 'ECONNRESET' ||
+      code === 'ECONNABORTED' ||
+      code === 'EPIPE' ||
+      code === 'ENOTFOUND' ||
+      err?.status === 429;
+}
+
 function isTransientWsProcessError(err) {
   const code = err?.code || '';
   const msg = String(err?.message || err);
+  const stack = String(err?.stack || '');
   return code === 'ECONNRESET' ||
       code === 'UND_ERR_SOCKET' ||
       code === 'ETIMEDOUT' ||
       code === 'EPIPE' ||
       msg.includes('socket hang up') ||
       msg.includes('Opening handshake has timed out') ||
-      msg.includes('other side closed');
+      msg.includes('other side closed') ||
+      msg.includes("Cannot read properties of null (reading 'setHeader')") ||
+      stack.includes('abortHandshake');
+}
+
+function isTransientProcessError(err) {
+  return isTransientWsProcessError(err) || isTransientNetworkError(err);
 }
 
 installSafeWebSocketHandler();
 
 process.on('uncaughtException', (err) => {
-  if (isTransientWsProcessError(err)) {
-    console.warn('Prevented exit from transient WebSocket error:', err?.message || err);
+  if (isTransientProcessError(err)) {
+    console.warn('Prevented exit from transient process error:', err?.message || err);
     return;
   }
   console.error('Uncaught exception:', err);
   process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  if (isTransientProcessError(reason)) {
+    console.warn('Prevented crash from transient unhandled rejection:', reason?.message || reason);
+    return;
+  }
+  console.error('Unhandled rejection:', reason);
 });
 
 const {
@@ -484,18 +511,6 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function isTransientNetworkError(err) {
-  const code = err?.code || err?.cause?.code;
-  return code === 'UND_ERR_CONNECT_TIMEOUT' ||
-      code === 'UND_ERR_SOCKET' ||
-      code === 'ETIMEDOUT' ||
-      code === 'ECONNRESET' ||
-      code === 'ECONNABORTED' ||
-      code === 'EPIPE' ||
-      code === 'ENOTFOUND' ||
-      err?.status === 429;
-}
-
 function isTransientRpcError(err) {
   const msg = String(err?.message || err || '');
   return msg.includes('Invalid JSON RPC response') ||
@@ -509,7 +524,7 @@ function isIgnorableDiscordDeleteError(err) {
   return err?.code === 10008;
 }
 
-async function withDiscordRetry(fn, { retries = 3, delayMs = 2000, label = 'Discord request' } = {}) {
+async function withDiscordRetry(fn, { retries = 4, delayMs = 2000, label = 'Discord request' } = {}) {
   let lastErr;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -525,19 +540,35 @@ async function withDiscordRetry(fn, { retries = 3, delayMs = 2000, label = 'Disc
   throw lastErr;
 }
 
+async function fetchDiscordChannel(channelId, label) {
+  return withDiscordRetry(
+      () => clientNewListings.channels.fetch(channelId),
+      { label: label || `fetch channel ${channelId}` }
+  );
+}
+
 async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additionalText,mollyChannel, pollyChannel) {
   if(mollyChannel){
-    await mollyChannel.send({ embeds: [embed] }).catch(err => {
+    await withDiscordRetry(
+        () => mollyChannel.send({ embeds: [embed] }),
+        { label: `send molly message for ${uniqueValue}`, retries: 2 }
+    ).catch(err => {
       console.error(`Failed to send molly message for ${uniqueValue}:`, err?.message || err);
     });
   }
   if(pollyChannel){
-    await pollyChannel.send({ embeds: [embed] }).catch(err => {
+    await withDiscordRetry(
+        () => pollyChannel.send({ embeds: [embed] }),
+        { label: `send polly message for ${uniqueValue}`, retries: 2 }
+    ).catch(err => {
       console.error(`Failed to send polly message for ${uniqueValue}:`, err?.message || err);
     });
   }
 
-  await channel.send({ embeds: [embed] });
+  await withDiscordRetry(
+      () => channel.send({ embeds: [embed] }),
+      { label: `send trade message for ${uniqueValue}` }
+  );
   if(additionalText){
     embed.fields.push(
         {
@@ -1456,11 +1487,9 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
   address.toLowerCase() === overtimeMarketTrade.ticketOwner.toLowerCase()
 )) {
       if(overtimeMarketTrade.isLive) {
-        mollyChannel = await clientNewListings.channels
-            .fetch(MOLLY_CHANNEL_ID_OP_LIVE);
+        mollyChannel = await fetchDiscordChannel(MOLLY_CHANNEL_ID_OP_LIVE);
       } else {
-      mollyChannel = await clientNewListings.channels
-          .fetch(MOLLY_CHANNEL_ID_OP);
+      mollyChannel = await fetchDiscordChannel(MOLLY_CHANNEL_ID_OP);
       }
       console.log("##### Molly bet detected for ticket " + overtimeMarketTrade.id);
       mollyBetData = await fetchMollyBetData(overtimeMarketTrade.id);
@@ -1469,7 +1498,7 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
 
     let pollyChannel;
     if (POLLY_BETS.some(addr => addr.toLowerCase() === overtimeMarketTrade.ticketOwner.toLowerCase())) {
-      pollyChannel = await clientNewListings.channels.fetch(POLLY_CHANNEL_ID_OP);
+      pollyChannel = await fetchDiscordChannel(POLLY_CHANNEL_ID_OP);
       console.log("##### Polly bet detected for ticket " + overtimeMarketTrade.id);
     }
 
@@ -1692,23 +1721,18 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
       let additionalText;
       if (Number(multiplier * amountInCurrency) < 500) {
         if (payoutInCurrency >= 1000) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_OPT_BIG_PAYOUT);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_OPT_BIG_PAYOUT);
         } else if (overtimeMarketTrade.isLive) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_OPT_LIVE_SMALL);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_OPT_LIVE_SMALL);
         } else {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_OPT_SMALL);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_OPT_SMALL);
         }
       } else {
         if (overtimeMarketTrade.isLive) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_OPT_LIVE_LARGE);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_OPT_LIVE_LARGE);
           additionalText = "OP: LIVE TRADE";
         } else {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_OPT_LARGE);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_OPT_LARGE);
           additionalText = "OP: Normal TRADE";
         }
       }
@@ -1908,23 +1932,18 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
       let additionalText;
       if (Number(multiplier * amountInCurrency) < 500) {
         if (payoutInCurrency >= 1000) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_OPT_BIG_PAYOUT);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_OPT_BIG_PAYOUT);
         } else if (overtimeMarketTrade.isLive) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_OPT_LIVE_SMALL);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_OPT_LIVE_SMALL);
         } else {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_OPT_SMALL);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_OPT_SMALL);
         }
       } else {
         if (overtimeMarketTrade.isLive) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_OPT_LIVE_LARGE);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_OPT_LIVE_LARGE);
           additionalText = "OP: LIVE TRADE";
         } else {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_OPT_LARGE);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_OPT_LARGE);
           additionalText = "OP: NORMAL TRADE";
         }
       }
@@ -1961,7 +1980,7 @@ async function printV2OPMessage(overtimeMarketTrade, typeMap) {
       }
       await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel, pollyChannel);
       if (overtimeMarketTrade.isLive && overtimeMarketTrade.marketsData.length > 1) {
-        const parlayLiveChannel = await clientNewListings.channels.fetch(CHANNEL_PARLAY_LIVE);
+        const parlayLiveChannel = await fetchDiscordChannel(CHANNEL_PARLAY_LIVE);
         await sendMessageIfNotDuplicate(parlayLiveChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel, pollyChannel);
       }
       console.log("#@#@#@Sending V2 message: " + JSON.stringify(embed));
@@ -2263,8 +2282,7 @@ async function printV2ARBMessage(overtimeMarketTrade, typeMap) {
     if (MOLLY_BETS.some(address =>
   address.toLowerCase() === overtimeMarketTrade.ticketOwner.toLowerCase()
 )) {
-      mollyChannel = await clientNewListings.channels
-          .fetch(MOLLY_CHANNEL_ID_ARB);
+      mollyChannel = await fetchDiscordChannel(MOLLY_CHANNEL_ID_ARB);
       console.log("##### Molly bet detected for ticket " + overtimeMarketTrade.id);
       mollyBetData = await fetchMollyBetData(overtimeMarketTrade.id);
       console.log("##### Molly bet data fetched:", mollyBetData);
@@ -2502,24 +2520,19 @@ async function printV2ARBMessage(overtimeMarketTrade, typeMap) {
       let additionalText;
       if (Number(multiplier * amountInCurrency) < 500) {
         if (payoutInCurrency >= 1000) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_ARB_BIG_PAYOUT);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_ARB_BIG_PAYOUT);
         } else if (overtimeMarketTrade.isLive) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_ARB_LIVE_SMALL);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_ARB_LIVE_SMALL);
 
         } else {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_ARB_SMALL);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_ARB_SMALL);
         }
       } else {
         if (overtimeMarketTrade.isLive) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_ARB_LIVE_LARGE);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_ARB_LIVE_LARGE);
           additionalText = "ARB: LIVE TRADE";
         } else {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_ARB_LARGE);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_ARB_LARGE);
           additionalText = "ARB: NORMAL TRADE";
         }
       }
@@ -2717,23 +2730,18 @@ async function printV2ARBMessage(overtimeMarketTrade, typeMap) {
       let additionalText;
       if (Number(multiplier * amountInCurrency) < 500) {
         if (payoutInCurrency >= 1000) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_ARB_BIG_PAYOUT);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_ARB_BIG_PAYOUT);
         } else if (overtimeMarketTrade.isLive) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_ARB_LIVE_SMALL);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_ARB_LIVE_SMALL);
         } else {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_ARB_SMALL);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_ARB_SMALL);
         }
       } else {
         if (overtimeMarketTrade.isLive) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_ARB_LIVE_LARGE);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_ARB_LIVE_LARGE);
           additionalText = "ARB: LIVE TRADE";
         } else {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_ARB_LARGE);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_ARB_LARGE);
           additionalText = "ARB: NORMAL TRADE";
         }
       }
@@ -2772,7 +2780,7 @@ async function printV2ARBMessage(overtimeMarketTrade, typeMap) {
 
       await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel)
       if (overtimeMarketTrade.isLive && overtimeMarketTrade.marketsData.length > 1) {
-        const parlayLiveChannel = await clientNewListings.channels.fetch(CHANNEL_PARLAY_LIVE);
+        const parlayLiveChannel = await fetchDiscordChannel(CHANNEL_PARLAY_LIVE);
         await sendMessageIfNotDuplicate(parlayLiveChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel);
       }
       console.log("#@#@#@Sending arb message: " + JSON.stringify(embed));
@@ -2847,8 +2855,7 @@ async function printV2BaseMessage(overtimeMarketTrade, typeMap) {
     if (MOLLY_BETS.some(address =>
   address.toLowerCase() === overtimeMarketTrade.ticketOwner.toLowerCase()
 )) {
-      mollyChannel = await clientNewListings.channels
-          .fetch(MOLLY_CHANNEL_ID_BASE);
+      mollyChannel = await fetchDiscordChannel(MOLLY_CHANNEL_ID_BASE);
       console.log("##### Molly bet detected for ticket " + overtimeMarketTrade.id);
       mollyBetData = await fetchMollyBetData(overtimeMarketTrade.id);
       console.log("##### Molly bet data fetched:", mollyBetData);
@@ -3079,25 +3086,20 @@ async function printV2BaseMessage(overtimeMarketTrade, typeMap) {
       let additionalText;
       if (Number(multiplier * amountInCurrency) < 500) {
         if (payoutInCurrency >= 1000) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_BASE_BIG_PAYOUT);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_BASE_BIG_PAYOUT);
         } else if (overtimeMarketTrade.isLive) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_BASE_LIVE_SMALL);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_BASE_LIVE_SMALL);
 
         } else {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_BASE_SMALL);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_BASE_SMALL);
         }
       } else {
         if (overtimeMarketTrade.isLive) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_BASE_LIVE_LARGE);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_BASE_LIVE_LARGE);
           additionalText = "BASE: LIVE TRADE";
 
         } else {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_BASE_LARGE);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_BASE_LARGE);
           additionalText = "BASE: NORMAL TRADE";
         }
       }
@@ -3295,25 +3297,20 @@ async function printV2BaseMessage(overtimeMarketTrade, typeMap) {
       let additionalText;
       if (Number(multiplier * amountInCurrency) < 500) {
         if (payoutInCurrency >= 1000) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_BASE_BIG_PAYOUT);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_BASE_BIG_PAYOUT);
         } else if (overtimeMarketTrade.isLive) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_BASE_LIVE_SMALL);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_BASE_LIVE_SMALL);
 
         } else {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_BASE_SMALL);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_BASE_SMALL);
         }
       } else {
         if (overtimeMarketTrade.isLive) {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_BASE_LIVE_LARGE);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_BASE_LIVE_LARGE);
           additionalText = "BASE: LIVE TRADE";
 
         } else {
-          overtimeTradesChannel = await clientNewListings.channels
-              .fetch(CHANNEL_BASE_LARGE);
+          overtimeTradesChannel = await fetchDiscordChannel(CHANNEL_BASE_LARGE);
           additionalText = "BASE: NORMAL TRADE";
         }
       }
@@ -3352,7 +3349,7 @@ async function printV2BaseMessage(overtimeMarketTrade, typeMap) {
 
       await sendMessageIfNotDuplicate(overtimeTradesChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel)
       if (overtimeMarketTrade.isLive && overtimeMarketTrade.marketsData.length > 1) {
-        const parlayLiveChannel = await clientNewListings.channels.fetch(CHANNEL_PARLAY_LIVE);
+        const parlayLiveChannel = await fetchDiscordChannel(CHANNEL_PARLAY_LIVE);
         await sendMessageIfNotDuplicate(parlayLiveChannel, embed, overtimeMarketTrade.id, additionalText, mollyChannel);
       }
       console.log("#@#@#@Sending base message: " + JSON.stringify(embed));
@@ -3501,8 +3498,9 @@ async function fetchTicket(contractTicket, id) {
 
 function makeWs(websocketUrl, label = 'WS') {
   const provider = new Web3.providers.WebsocketProvider(websocketUrl, {
+    timeout: 60000,
     clientConfig: { keepalive: true, keepaliveInterval: 30000 },
-    reconnect: { auto: true, delay: 3000, maxAttempts: Infinity, onTimeout: true },
+    reconnect: { auto: true, delay: 5000, maxAttempts: Infinity, onTimeout: true },
   });
 
   if (typeof provider.on === 'function') {
