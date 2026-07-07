@@ -517,6 +517,10 @@ function isTransientRpcError(err) {
       msg.includes('connection not open') ||
       msg.includes('connect timeout') ||
       msg.includes('timeout') ||
+      msg.includes('Internal server error') ||
+      msg.includes('Service Unavailable') ||
+      msg.includes('Bad Gateway') ||
+      msg.includes('Too Many Requests') ||
       isTransientNetworkError(err);
 }
 
@@ -547,7 +551,33 @@ async function fetchDiscordChannel(channelId, label) {
   );
 }
 
+// Discord rejects embeds whose field values are empty/undefined or exceed 1024 chars,
+// which was silently dropping trades. Coerce every field value to a safe, bounded string.
+function sanitizeEmbed(embed) {
+  if (!embed || !Array.isArray(embed.fields)) return embed;
+  for (const field of embed.fields) {
+    if (!field) continue;
+    let value = field.value;
+    if (value === null || value === undefined || value === '') {
+      value = '—';
+    } else if (typeof value !== 'string') {
+      value = String(value);
+    }
+    if (value.length > 1024) {
+      value = value.slice(0, 1021) + '…';
+    }
+    field.value = value;
+    if (typeof field.name !== 'string' || field.name.length === 0) {
+      field.name = '\u200b';
+    } else if (field.name.length > 256) {
+      field.name = field.name.slice(0, 256);
+    }
+  }
+  return embed;
+}
+
 async function sendMessageIfNotDuplicate(channel, embed, uniqueValue, additionalText,mollyChannel, pollyChannel) {
+  sanitizeEmbed(embed);
   if(mollyChannel){
     await withDiscordRetry(
         () => mollyChannel.send({ embeds: [embed] }),
@@ -2260,7 +2290,11 @@ async function robustGetTicketsData(ticketContract, ids, labelBase = 'getTickets
     }
   }
 
-  await fetchChunk(ids, 0);
+  // Sending the whole active list (often 1000+ ids) in one call always reverts on gas
+  // and forces slow recursive halving. Start from DATA_CHUNK-sized slices instead.
+  for (let start = 0; start < ids.length; start += DATA_CHUNK) {
+    await fetchChunk(ids.slice(start, start + DATA_CHUNK), 0);
+  }
   return out;
 }
 
@@ -3489,11 +3523,29 @@ startBASENewTicketListener();
 
 
 
-async function fetchTicket(contractTicket, id) {
-  return callWithLabel(`fetchTicket(${id})`, async () => {
-    const arr = await contractTicket.methods.getTicketsData([id]).call();
-    return arr?.[0];
-  });
+async function fetchTicket(contractTicket, id, { retries = 4, delayMs = 1500 } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const arr = await contractTicket.methods.getTicketsData([id]).call();
+      if (arr?.[0]) return arr[0];
+      // Empty result usually means the HTTP node hasn't caught up to the WS event yet
+    } catch (err) {
+      lastErr = err;
+      const msg = String(err?.message || err);
+      const isRevert = msg.includes('execution reverted') || msg.includes('revert');
+      // Reverts/empty results here are typically WS/HTTP block lag, so retry them too
+      if (attempt === retries || (!isRevert && !isTransientRpcError(err))) {
+        console.error(`❌ fetchTicket(${id}) failed:`, msg);
+        throw err;
+      }
+    }
+    const waitMs = delayMs * (attempt + 1);
+    console.warn(`⚠️ fetchTicket(${id}) not ready (attempt ${attempt + 1}/${retries + 1}), retrying in ${waitMs}ms`);
+    await sleep(waitMs);
+  }
+  if (lastErr) throw lastErr;
+  return undefined;
 }
 
 function makeWs(websocketUrl, label = 'WS') {
